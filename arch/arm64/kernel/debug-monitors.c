@@ -23,6 +23,7 @@
 #include <linux/hardirq.h>
 #include <linux/init.h>
 #include <linux/ptrace.h>
+#include <linux/kprobes.h>
 #include <linux/stat.h>
 #include <linux/uaccess.h>
 
@@ -237,6 +238,7 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
 			       struct pt_regs *regs)
 {
 	siginfo_t info;
+	bool handler_found = false;
 
 	/*
 	 * If we are stepping a pending breakpoint, call the hw_breakpoint
@@ -260,15 +262,21 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
 		 */
 		user_rewind_single_step(current);
 	} else {
+#ifdef	CONFIG_KPROBES
+		if (kprobe_single_step_handler(regs, esr) == DBG_HOOK_HANDLED)
+			handler_found = true;
+#endif
 		if (call_step_hook(regs, esr) == DBG_HOOK_HANDLED)
-			return 0;
+			handler_found = true;
 
-		pr_warning("Unexpected kernel single-step exception at EL1\n");
-		/*
-		 * Re-enable stepping since we know that we will be
-		 * returning to regs.
-		 */
-		set_regs_spsr_ss(regs);
+		if (!handler_found) {
+			pr_warn("Unexpected kernel single-step exception at EL1\n");
+			/*
+			 * Re-enable stepping since we know that we will be
+			 * returning to regs.
+			 */
+			set_regs_spsr_ss(regs);
+		}
 	}
 
 	return 0;
@@ -315,6 +323,18 @@ static int brk_handler(unsigned long addr, unsigned int esr,
 		       struct pt_regs *regs)
 {
 	siginfo_t info;
+
+// HACK!!
+#define BRK64_KPROBES        0xC007
+#define DBG_HOOK_HANDLED     0
+
+       if ((esr & BRK64_ESR_MASK) == BRK64_ESR_KPROBES) {
+               pr_info("KPROBE: hit at PC=%pS (ESR=0x%08x)\n",
+                       (void *)instruction_pointer(regs), esr);
+               regs->pc += 4;
+
+               return 0;
+       }
 
 	if (call_break_hook(regs, esr) == DBG_HOOK_HANDLED)
 		return 0;

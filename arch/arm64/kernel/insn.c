@@ -161,11 +161,9 @@ bool __kprobes aarch64_insn_uses_literal(u32 insn)
 bool __kprobes aarch64_insn_is_branch(u32 insn)
 {
 	/* b, bl, cb*, tb*, b.cond, br, blr */
-
+// HACK!!
 	return aarch64_insn_is_b_bl_cb_tb(insn) ||
-		aarch64_insn_is_br_blr(insn) ||
-		aarch64_insn_is_ret(insn) ||
-		aarch64_insn_is_bcond(insn);
+		aarch64_insn_is_br_blr(insn);
 }
 
 bool __kprobes aarch64_insn_is_daif_access(u32 insn)
