@@ -58,5 +58,6 @@ int kprobe_exceptions_notify(struct notifier_block *self,
 			     unsigned long val, void *data);
 int kprobe_breakpoint_handler(struct pt_regs *regs, unsigned int esr);
 int kprobe_single_step_handler(struct pt_regs *regs, unsigned int esr);
+void kretprobe_trampoline(void);
 
 #endif /* _ARM_KPROBES_H */
