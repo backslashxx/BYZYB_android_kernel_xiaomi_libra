@@ -120,6 +120,8 @@ struct pt_regs {
 	u64 syscallno;
 };
 
+#define MAX_REG_OFFSET (sizeof(struct user_pt_regs) - sizeof(u64))
+
 #define arch_has_single_step()	(1)
 
 #ifdef CONFIG_COMPAT
@@ -148,10 +150,37 @@ struct pt_regs {
 #define user_stack_pointer(regs) \
 	(!compat_user_mode(regs) ? (regs)->sp : (regs)->compat_sp)
 
+/**
+ * regs_get_register() - get register value from its offset
+ * @regs:	   pt_regs from which register value is gotten
+ * @offset:    offset number of the register.
+ *
+ * regs_get_register returns the value of a register whose offset from @regs.
+ * The @offset is the offset of the register in struct pt_regs.
+ * If @offset is bigger than MAX_REG_OFFSET, this returns 0.
+ */
+static inline u64 regs_get_register(struct pt_regs *regs,
+					      unsigned int offset)
+{
+	if (unlikely(offset > MAX_REG_OFFSET))
+		return 0;
+	return *(u64 *)((u64)regs + offset);
+}
+
+/* Valid only for Kernel mode traps. */
+static inline unsigned long kernel_stack_pointer(struct pt_regs *regs)
+{
+	return regs->ARM_sp;
+}
+
 static inline unsigned long regs_return_value(struct pt_regs *regs)
 {
 	return regs->regs[0];
 }
+
+extern int regs_query_register_offset(const char *name);
+extern unsigned long regs_get_kernel_stack_nth(struct pt_regs *regs,
+					       unsigned int n);
 
 /*
  * Are the current registers suitable for user mode? (used to maintain
