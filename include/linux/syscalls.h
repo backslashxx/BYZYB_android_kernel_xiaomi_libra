@@ -895,4 +895,11 @@ asmlinkage long sys_getrandom(char __user *buf, size_t count,
 
 asmlinkage long sys_membarrier(int cmd, int flags);
 
+extern long do_faccessat(int dfd, const char __user *filename, int mode);
+
+static inline long ksys_access(const char __user *filename, int mode)
+{
+	return do_faccessat(AT_FDCWD, filename, mode);
+}
+
 #endif
