@@ -80,6 +80,7 @@ typedef enum eAniAuthType
 #if defined WLAN_FEATURE_VOWIFI_11R
     eSIR_FT_AUTH,
 #endif
+    eSIR_AUTH_TYPE_SAE = 3,
 #if defined FEATURE_WLAN_ESE
     eSIR_LEAP_AUTH = 0x80,
 #endif

@@ -16326,6 +16326,10 @@ static int wlan_hdd_cfg80211_set_auth_type(hdd_adapter_t *pAdapter,
             break;
 #endif
 
+        case NL80211_AUTHTYPE_SAE:
+            hddLog(LOG1, "set authentication type to SAE");
+            pHddStaCtx->conn_info.authType = eCSR_AUTH_TYPE_SAE;
+            break;
 
         default:
             hddLog(VOS_TRACE_LEVEL_ERROR,
@@ -16391,6 +16395,11 @@ static int wlan_hdd_set_akm_suite( hdd_adapter_t *pAdapter,
         case WLAN_AKM_SUITE_OSEN:
             hddLog(VOS_TRACE_LEVEL_INFO, "%s: setting key mgmt type to OSEN",
                             __func__);
+            pWextState->authKeyMgmt |= IW_AUTH_KEY_MGMT_802_1X;
+            break;
+
+        case WLAN_AKM_SUITE_SAE:
+            hddLog(LOG1, "setting key mgmt type to SAE");
             pWextState->authKeyMgmt |= IW_AUTH_KEY_MGMT_802_1X;
             break;
 
