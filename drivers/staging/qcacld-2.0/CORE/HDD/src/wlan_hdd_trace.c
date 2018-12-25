@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2016, 2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -37,6 +37,7 @@
 #include "wlan_hdd_trace.h"
 #include "wlan_hdd_main.h"
 
+#ifdef WLAN_DEBUG
 static tANI_U8 *hddTraceGetEventString(tANI_U32 code)
 {
 	switch (code) {
@@ -84,6 +85,12 @@ static tANI_U8 *hddTraceGetEventString(tANI_U32 code)
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_SCAN);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_SCHED_SCAN_START);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_SCHED_SCAN_STOP);
+		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_SET_CHANNEL);
+		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_ADD_BEACON);
+		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_SET_BEACON);
+		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_CHANGE_IFACE);
+		CASE_RETURN_STRING(TRACE_CODE_HDD_CHANGE_STATION);
+		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_UPDATE_BSS);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_REMAIN_ON_CHANNEL);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_REMAINCHANREADYHANDLER);
 		CASE_RETURN_STRING
@@ -98,6 +105,8 @@ static tANI_U8 *hddTraceGetEventString(tANI_U32 code)
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_DEL_PMKSA);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_UPDATE_FT_IES);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_TDLS_MGMT);
+		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_TDLS_OPER);
+		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_SET_REKEY_DATA);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_RESUME_WLAN);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_SUSPEND_WLAN);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CFG80211_SET_MAC_ACL);
@@ -111,26 +120,26 @@ static tANI_U8 *hddTraceGetEventString(tANI_U32 code)
 		CASE_RETURN_STRING(TRACE_CODE_HDD_STORE_JOIN_REQ);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_CLEAR_JOIN_REQ);
 		CASE_RETURN_STRING(TRACE_CODE_HDD_ISSUE_JOIN_REQ);
-
 	default:
 		return ("UNKNOWN");
 		break;
 	}
 }
+#endif
 
 void hddTraceDump(void *pMac, tpvosTraceRecord pRecord, tANI_U16 recIndex)
 {
     if (TRACE_CODE_HDD_RX_SME_MSG == pRecord->code)
-        hddLog(LOG1, "%04d %012llu S%d %-14s %-30s(0x%x)",
+        hddLog(LOG1, "%04d %s S%d %-14s %-30s(0x%x)",
             recIndex, pRecord->time, pRecord->session, "RX SME MSG:",
             get_eRoamCmdStatus_str(pRecord->data), pRecord->data);
     else
-        hddLog(LOG1, "%04d %012llu S%d %-14s %-30s(0x%x)",
+        hddLog(LOG1, "%04d %s S%d %-14s %-30s(0x%x)",
             recIndex, pRecord->time, pRecord->session, "HDD Event:",
             hddTraceGetEventString(pRecord->code), pRecord->data);
 }
 
-void hddTraceInit()
+void hddTraceInit(void)
 {
 	vosTraceRegister(VOS_MODULE_ID_HDD, (tpvosTraceCb) & hddTraceDump);
 }

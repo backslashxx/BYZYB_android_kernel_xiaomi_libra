@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -51,6 +51,8 @@
 #endif
 
 #include "regdomain_common.h"
+#include "qdf_crypto.h"
+#include "lim_process_fils.h"
 
 #define DOT11F_RSN_VERSION 1    /* current supported version */
 #define DOT11F_RSN_OUI_SIZE 4
@@ -356,16 +358,65 @@ populate_dot11f_avoid_channel_ie(tpAniSirGlobal mac_ctx,
 		return;
 
 	dot11f->present = true;
-	dot11f->type = QCOM_VENDOR_IE_MCC_AVOID_CH;
-	dot11f->channel = pe_session->currentOperChannel;
+	dot11f->MccChanInfo.present = true;
+	dot11f->MccChanInfo.channel = pe_session->currentOperChannel;
 }
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
+
+#ifdef FEATURE_WLAN_SUB_20_MHZ
+/**
+ * populate_dot11f_sub_20_channel_width_ie() - Populate a sDot11fIEQComVendorIE
+ * @mac_ctx_ptr: Pointer to Global MAC structure
+ * @dot11f_ptr: Pointer to Address of a sDot11fIEQComVendorIE to be filled in
+ * @pe_session: PE session entry
+ *
+ * Return: none
+ */
+void
+populate_dot11f_sub_20_channel_width_ie(
+	tpAniSirGlobal mac_ctx_ptr,
+	tDot11fIEQComVendorIE *dot11f_ptr,
+	tpPESession pe_session)
+{
+	uint8_t  sub20_static_channelwidth;
+	uint8_t  sub20_dynamic_channelwidth;
+	uint8_t  sub20_capability;
+
+	sub20_static_channelwidth = mac_ctx_ptr->sub20_channelwidth;
+	sub20_dynamic_channelwidth = mac_ctx_ptr->sub20_dynamic_channelwidth;
+
+	if (sub20_static_channelwidth == 0 &&
+	    sub20_dynamic_channelwidth == 0)
+		return;
+
+	if (sub20_dynamic_channelwidth != 0)
+		sub20_capability = sub20_dynamic_channelwidth;
+	else
+		sub20_capability = sub20_static_channelwidth;
+
+	if (LIM_IS_AP_ROLE(pe_session) ||
+	    LIM_IS_STA_ROLE(pe_session)) {
+		dot11f_ptr->present = true;
+		dot11f_ptr->Sub20Info.present = true;
+		dot11f_ptr->Sub20Info.capability = sub20_capability;
+	}
+
+	if (LIM_IS_AP_ROLE(pe_session) &&
+	    pe_session->dfsIncludeChanSwIe == VOS_TRUE) {
+		dot11f_ptr->present = true;
+		dot11f_ptr->Sub20Info.present = true;
+		dot11f_ptr->Sub20Info.csa_chanwidth =
+			 pe_session->lim_sub20_channel_switch_bandwidth;
+	}
+}
+#endif
 
 void
 PopulateDot11fChanSwitchWrapper(tpAniSirGlobal pMac,
                             tDot11fIEChannelSwitchWrapper *pDot11f,
                             tpPESession psessionEntry)
 {
+    uint8_t *ie_ptr = NULL;
     /*
      * The new country subelement is present only when
      * 1. AP performs Extended Channel switching to new country.
@@ -395,6 +446,20 @@ PopulateDot11fChanSwitchWrapper(tpAniSirGlobal pMac,
                      psessionEntry->gLimWiderBWChannelSwitch.newCenterChanFreq1;
      pDot11f->WiderBWChanSwitchAnn.present = 1;
 
+     /*
+      * Add the VHT Transmit power Envelope Sublement.
+      */
+     ie_ptr = lim_get_ie_ptr(psessionEntry->addIeParams.probeRespBCNData_buff,
+               psessionEntry->addIeParams.probeRespBCNDataLen,
+               DOT11F_EID_VHT_TRANSMIT_POWER_ENV);
+     if (ie_ptr) {
+         /* Ignore EID field */
+         ie_ptr++;
+         pDot11f->vht_transmit_power_env.present = 1;
+         pDot11f->vht_transmit_power_env.num_bytes = *ie_ptr++;
+         vos_mem_copy(pDot11f->vht_transmit_power_env.bytes,
+            ie_ptr, pDot11f->vht_transmit_power_env.num_bytes);
+     }
 }
 
 #ifdef WLAN_FEATURE_11AC
@@ -678,6 +743,7 @@ PopulateDot11fHTCaps(tpAniSirGlobal           pMac,
 
     uHTCapabilityInfo.nCfgValue16 = nCfgValue & 0xFFFF;
 
+    pDot11f->advCodingCap             = uHTCapabilityInfo.htCapInfo.advCodingCap;
     pDot11f->mimoPowerSave            = uHTCapabilityInfo.htCapInfo.mimoPowerSave;
     pDot11f->greenField               = uHTCapabilityInfo.htCapInfo.greenField;
     pDot11f->delayedBA                = uHTCapabilityInfo.htCapInfo.delayedBA;
@@ -691,7 +757,6 @@ PopulateDot11fHTCaps(tpAniSirGlobal           pMac,
     if (psessionEntry == NULL) // Only in case of NO session
     {
         pDot11f->supportedChannelWidthSet = uHTCapabilityInfo.htCapInfo.supportedChannelWidthSet;
-        pDot11f->advCodingCap = uHTCapabilityInfo.htCapInfo.advCodingCap;
         pDot11f->txSTBC = uHTCapabilityInfo.htCapInfo.txSTBC;
         pDot11f->rxSTBC = uHTCapabilityInfo.htCapInfo.rxSTBC;
         pDot11f->shortGI20MHz             = uHTCapabilityInfo.htCapInfo.shortGI20MHz;
@@ -699,7 +764,6 @@ PopulateDot11fHTCaps(tpAniSirGlobal           pMac,
     }
     else
     {
-        pDot11f->advCodingCap             = psessionEntry->htConfig.ht_rx_ldpc;
         pDot11f->supportedChannelWidthSet = psessionEntry->htSupportedChannelWidthSet;
         pDot11f->txSTBC                   = psessionEntry->htConfig.ht_tx_stbc;
         pDot11f->rxSTBC                   = psessionEntry->htConfig.ht_rx_stbc;
@@ -1225,6 +1289,15 @@ PopulateDot11fExtCap(tpAniSirGlobal   pMac,
     }
 #endif
     p_ext_cap->extChanSwitch = 1;
+
+    if (pMac->roam.configParam.enable_bcast_probe_rsp)
+        p_ext_cap->fils_capability = 1;
+
+    if (pDot11f->present)
+    {
+        /* Need to compute the num_bytes based on bits set */
+        pDot11f->num_bytes = lim_compute_ext_cap_ie_length(pDot11f);
+    }
 
     return eSIR_SUCCESS;
 }
@@ -2216,7 +2289,28 @@ tSirRetStatus sirvalidateandrectifyies(tpAniSirGlobal pMac,
                        FL("Added RSN Capability to the RSNIE as 0x00 0x00"));
 
                 return eHAL_STATUS_SUCCESS;
+            } else {
+                /*
+                 * Workaround: Some APs may add extra 0x00 padding after IEs.
+                 * Return true to allow these probe response frames proceed.
+                 */
+                if (nFrameBytes - length > 0) {
+                    tANI_U32 i;
+                    tANI_BOOLEAN zero_padding = VOS_TRUE;
+
+                    for (i = length; i < nFrameBytes; i ++) {
+                        if (pMgmtFrame[i-1] != 0x0) {
+                            zero_padding = VOS_FALSE;
+                            break;
+                        }
+                    }
+
+                    if (zero_padding) {
+                        return eHAL_STATUS_SUCCESS;
+                    }
+                }
             }
+
             return eSIR_FAILURE;
         }
     }
@@ -2224,6 +2318,151 @@ tSirRetStatus sirvalidateandrectifyies(tpAniSirGlobal pMac,
     return eHAL_STATUS_SUCCESS;
 }
 
+/**
+ * sir_copy_hs20_ie() - Update HS 2.0 Information Element.
+ * @dest: dest HS IE buffer to be updated
+ * @src: src HS IE buffer
+ *
+ * Update HS2.0 IE info from src to dest
+ *
+ * Return: void
+ */
+void sir_copy_hs20_ie(tDot11fIEhs20vendor_ie *dest, tDot11fIEhs20vendor_ie *src)
+{
+	if (src->present) {
+		adf_os_mem_copy(dest,
+				src,
+				sizeof(tDot11fIEhs20vendor_ie) -
+					sizeof(src->hs_id));
+
+		if (src->hs_id_present)
+			adf_os_mem_copy(&dest->hs_id,
+					&src->hs_id,
+					sizeof(src->hs_id));
+	}
+}
+
+#ifdef WLAN_FEATURE_FILS_SK
+void populate_dot11f_fils_params(tpAniSirGlobal mac_ctx,
+        tDot11fAssocRequest *frm,
+        tpPESession pe_session)
+{
+    struct pe_fils_session *fils_info = pe_session->fils_info;
+
+    /* Populate RSN IE with FILS AKM */
+    PopulateDot11fRSNOpaque(mac_ctx, &(pe_session->pLimJoinReq->rsnIE),
+                                &frm->RSNOpaque);
+
+    /* Populate FILS session IE */
+    frm->fils_session.present = true;
+    vos_mem_copy(frm->fils_session.session,
+             fils_info->fils_session, FILS_SESSION_LENGTH);
+
+    /* Populate FILS Key confirmation IE */
+    if (fils_info->key_auth_len) {
+        frm->fils_key_confirmation.present = true;
+        frm->fils_key_confirmation.num_key_auth =
+                        fils_info->key_auth_len;
+
+        vos_mem_copy(frm->fils_key_confirmation.key_auth,
+                 fils_info->key_auth, fils_info->key_auth_len);
+    }
+}
+
+/**
+ * update_fils_data: update fils params from beacon/probe response
+ * @fils_ind: pointer to sir_fils_indication
+ * @fils_indication: pointer to tDot11fIEfils_indication
+ *
+ * Return: None
+ */
+static void update_fils_data(struct sir_fils_indication *fils_ind,
+                 tDot11fIEfils_indication *fils_indication)
+{
+    uint8_t *data;
+    uint8_t remaining_data = fils_indication->num_variable_data;
+    VosContextType *pVosContext = NULL;
+    tpAniSirGlobal pMac = NULL;
+
+    pVosContext = vos_get_global_context(VOS_MODULE_ID_SYS, NULL);
+    pMac = (tpAniSirGlobal)vos_get_context(VOS_MODULE_ID_PE, pVosContext);
+
+    data = fils_indication->variable_data;
+    fils_ind->is_present = true;
+    fils_ind->is_ip_config_supported =
+            fils_indication->is_ip_config_supported;
+    fils_ind->is_fils_sk_auth_supported =
+            fils_indication->is_fils_sk_auth_supported;
+    fils_ind->is_fils_sk_auth_pfs_supported =
+            fils_indication->is_fils_sk_auth_pfs_supported;
+    fils_ind->is_pk_auth_supported =
+            fils_indication->is_pk_auth_supported;
+    if (fils_indication->is_cache_id_present) {
+        if (remaining_data < SIR_CACHE_IDENTIFIER_LEN) {
+            limLog(pMac, LOGE,
+                FL("Failed to copy Cache Identifier, Invalid remaining data %d"),
+                remaining_data);
+            return;
+        }
+        fils_ind->cache_identifier.is_present = true;
+        vos_mem_copy(fils_ind->cache_identifier.identifier,
+                data, SIR_CACHE_IDENTIFIER_LEN);
+        data = data + SIR_CACHE_IDENTIFIER_LEN;
+        remaining_data = remaining_data - SIR_CACHE_IDENTIFIER_LEN;
+    }
+    if (fils_indication->is_hessid_present) {
+        if (remaining_data < SIR_HESSID_LEN) {
+            limLog(pMac, LOGE,
+                FL("Failed to copy HESSID, Invalid remaining data %d"),
+                remaining_data);
+            return;
+        }
+        fils_ind->hessid.is_present = true;
+        vos_mem_copy(fils_ind->hessid.hessid,
+                data, SIR_HESSID_LEN);
+        data = data + SIR_HESSID_LEN;
+        remaining_data = remaining_data - SIR_HESSID_LEN;
+    }
+    if (fils_indication->realm_identifiers_cnt) {
+        if (remaining_data < (fils_indication->realm_identifiers_cnt *
+            SIR_REALM_LEN)) {
+            limLog(pMac, LOGE,
+                FL("Failed to copy Realm Identifier, Invalid remaining data %d realm_cnt %d"),
+                remaining_data, fils_indication->realm_identifiers_cnt);
+            return;
+        }
+        fils_ind->realm_identifier.is_present = true;
+        fils_ind->realm_identifier.realm_cnt =
+            fils_indication->realm_identifiers_cnt;
+        vos_mem_copy(fils_ind->realm_identifier.realm,
+            data, fils_ind->realm_identifier.realm_cnt *
+                    SIR_REALM_LEN);
+    }
+}
+
+/**
+ * sir_convert_fils_data_to_probersp_struct: update fils params from probe resp
+ * @probe_resp: pointer to tpSirProbeRespBeacon
+ * @pr: pointer to tDot11fProbeResponse
+ *
+ * Return: None
+ */
+static void
+sir_convert_fils_data_to_probersp_struct(tpSirProbeRespBeacon probe_resp,
+            tDot11fProbeResponse *pr)
+{
+    if (!pr->fils_indication.present)
+        return;
+
+    update_fils_data(&probe_resp->fils_ind, &pr->fils_indication);
+}
+#else
+static inline void
+sir_convert_fils_data_to_probersp_struct(tpSirProbeRespBeacon probe_resp,
+        tDot11fProbeResponse *pr)
+{
+}
+#endif
 tSirRetStatus sirConvertProbeFrame2Struct(tpAniSirGlobal       pMac,
                                           tANI_U8             *pFrame,
                                           tANI_U32             nFrame,
@@ -2258,13 +2497,6 @@ tSirRetStatus sirConvertProbeFrame2Struct(tpAniSirGlobal       pMac,
         PELOG2(sirDumpBuf(pMac, SIR_DBG_MODULE_ID, LOG2, pFrame, nFrame);)
         vos_mem_free(pr);
         return eSIR_FAILURE;
-    }
-    else if ( DOT11F_WARNED( status ) )
-    {
-      limLog(pMac, LOGW,
-             FL("Warnings while unpacking a Probe Response(0x%08x, %d bytes):"),
-             status, nFrame);
-        PELOG2(sirDumpBuf(pMac, SIR_DBG_MODULE_ID, LOG2, pFrame, nFrame);)
     }
 
     // & "transliterate" from a 'tDot11fProbeResponse' to a 'tSirProbeRespBeacon'...
@@ -2489,8 +2721,34 @@ tSirRetStatus sirConvertProbeFrame2Struct(tpAniSirGlobal       pMac,
     }
 #endif
     pProbeResp->Vendor1IEPresent = pr->Vendor1IE.present;
-    pProbeResp->Vendor2IEPresent = pr->Vendor2IE.present;
     pProbeResp->Vendor3IEPresent = pr->Vendor3IE.present;
+    pProbeResp->vendor2_ie.present = pr->vendor2_ie.present;
+
+    if (pr->vendor2_ie.present) {
+            pProbeResp->vendor2_ie.type = pr->vendor2_ie.type;
+            pProbeResp->vendor2_ie.sub_type = pr->vendor2_ie.sub_type;
+    }
+    if (pr->vendor2_ie.VHTCaps.present) {
+            vos_mem_copy(&pProbeResp->vendor2_ie.VHTCaps,
+                            &pr->vendor2_ie.VHTCaps,
+                                sizeof(tDot11fIEVHTCaps));
+    }
+    if (pr->vendor2_ie.VHTOperation.present) {
+           vos_mem_copy(&pProbeResp->vendor2_ie.VHTOperation,
+                                &pr->vendor2_ie.VHTOperation,
+                                sizeof(tDot11fIEVHTOperation));
+    }
+
+    if (pr->QComVendorIE.present &&
+        pr->QComVendorIE.Sub20Info.present) {
+            pProbeResp->vendor_sub20_capability =
+                pr->QComVendorIE.Sub20Info.capability;
+    }
+#ifdef WLAN_FEATURE_FILS_SK
+    sir_convert_fils_data_to_probersp_struct(pProbeResp, pr);
+#endif
+
+    sir_copy_hs20_ie(&pProbeResp->hs20vendor_ie, &pr->hs20vendor_ie);
 
     vos_mem_free(pr);
     return eSIR_SUCCESS;
@@ -2698,23 +2956,91 @@ sirConvertAssocReqFrame2Struct(tpAniSirGlobal pMac,
     if (ar->ExtCap.present)
     {
         struct s_ext_cap *p_ext_cap;
-
-        vos_mem_copy(&pAssocReq->ExtCap.bytes, &ar->ExtCap.bytes,
-                     ar->ExtCap.num_bytes);
-
+        vos_mem_copy( &pAssocReq->ExtCap, &ar->ExtCap,
+                sizeof(tDot11fIEExtCap));
         p_ext_cap = (struct s_ext_cap *)&pAssocReq->ExtCap.bytes;
         limLog(pMac, LOG1,
                FL("ExtCap present, timingMeas: %d Initiator: %d Responder: %d"),
                p_ext_cap->timingMeas, p_ext_cap->fine_time_meas_initiator,
                p_ext_cap->fine_time_meas_responder);
     }
+
+    pAssocReq->vendor2_ie.present = ar->vendor2_ie.present;
+    if (ar->vendor2_ie.present) {
+            pAssocReq->vendor2_ie.type = ar->vendor2_ie.type;
+            pAssocReq->vendor2_ie.sub_type = ar->vendor2_ie.sub_type;
+
+            if (ar->vendor2_ie.VHTCaps.present) {
+                vos_mem_copy(&pAssocReq->vendor2_ie.VHTCaps,
+                                &ar->vendor2_ie.VHTCaps,
+                                sizeof(tDot11fIEVHTCaps));
+                limLog(pMac, LOG1,
+                    FL("Received Assoc Request with Vendor specific VHT Cap"));
+                limLogVHTCap(pMac, &pAssocReq->VHTCaps);
+            }
+    }
+
+    if (ar->QComVendorIE.present &&
+        ar->QComVendorIE.Sub20Info.present)
+            pAssocReq->vendor_sub20_capability =
+             ar->QComVendorIE.Sub20Info.capability;
+
     vos_mem_free(ar);
     return eSIR_SUCCESS;
 
 } // End sirConvertAssocReqFrame2Struct.
 
+#ifdef WLAN_FEATURE_FILS_SK
+/**
+ * fils_convert_assoc_rsp_frame2_struct() - Copy FILS IE's to Assoc rsp struct
+ * @ar: frame parser Assoc response struct
+ * @pAssocRsp: LIM Assoc response
+ *
+ * Return: None
+ */
+static void fils_convert_assoc_rsp_frame2_struct(tpAniSirGlobal pMac,
+                         tDot11fAssocResponse *ar,
+                         tpSirAssocRsp pAssocRsp)
+{
+    if (ar->fils_session.present) {
+        limLog(pMac, LOG1, FL("fils session IE present"));
+        pAssocRsp->fils_session.present = true;
+        vos_mem_copy(pAssocRsp->fils_session.session,
+                ar->fils_session.session,
+                DOT11F_IE_FILS_SESSION_MAX_LEN);
+    }
+
+    if (ar->fils_key_confirmation.present) {
+        limLog(pMac, LOG1, FL("fils key conf IE present"));
+        pAssocRsp->fils_key_auth.num_key_auth =
+            ar->fils_key_confirmation.num_key_auth;
+        vos_mem_copy(pAssocRsp->fils_key_auth.key_auth,
+                ar->fils_key_confirmation.key_auth,
+                pAssocRsp->fils_key_auth.num_key_auth);
+    }
+
+    if (ar->fils_kde.present) {
+        limLog(pMac, LOG1,
+                  FL("fils kde IE present %d"),ar->fils_kde.num_kde_list);
+        pAssocRsp->fils_kde.num_kde_list =
+            ar->fils_kde.num_kde_list;
+        vos_mem_copy(pAssocRsp->fils_kde.key_rsc,
+                ar->fils_kde.key_rsc, KEY_RSC_LEN);
+        vos_mem_copy(&pAssocRsp->fils_kde.kde_list,
+                &ar->fils_kde.kde_list,
+                pAssocRsp->fils_kde.num_kde_list);
+    }
+}
+#else
+static inline void fils_convert_assoc_rsp_frame2_struct(tpAniSirGlobal pMac,
+                                 tDot11fAssocResponse *ar,
+                                 tpSirAssocRsp pAssocRsp)
+{ }
+#endif
+
 tSirRetStatus
 sirConvertAssocRespFrame2Struct(tpAniSirGlobal pMac,
+                                tpPESession psessionEntry,
                                 tANI_U8            *pFrame,
                                 tANI_U32            nFrame,
                                 tpSirAssocRsp  pAssocRsp)
@@ -2726,6 +3052,18 @@ sirConvertAssocRespFrame2Struct(tpAniSirGlobal pMac,
     // Zero-init our [out] parameter,
     vos_mem_set( ( tANI_U8* )pAssocRsp, sizeof(tSirAssocRsp), 0 );
 
+#ifdef WLAN_FEATURE_FILS_SK
+    /* decrypt the cipher text using AEAD decryption */
+    if (lim_is_fils_connection(psessionEntry)) {
+        status = aead_decrypt_assoc_rsp(pMac, psessionEntry,
+                        &ar, pFrame, &nFrame);
+        if (!VOS_IS_STATUS_SUCCESS(status)) {
+            limLog(pMac, LOGE,
+                  FL("FILS assoc rsp AEAD decrypt fails"));
+            return eSIR_FAILURE;
+        }
+    }
+#endif
     // delegate to the framesc-generated code,
     status = dot11fUnpackAssocResponse( pMac, pFrame, nFrame, &ar);
     if ( DOT11F_FAILED( status ) )
@@ -2849,7 +3187,7 @@ sirConvertAssocRespFrame2Struct(tpAniSirGlobal pMac,
 #endif
 
 #ifdef WLAN_FEATURE_VOWIFI_11R
-    if (ar.num_RICDataDesc) {
+    if (ar.num_RICDataDesc && ar.num_RICDataDesc <= 2) {
         for (cnt=0; cnt < ar.num_RICDataDesc; cnt++) {
             if (ar.RICDataDesc[cnt].present) {
                 vos_mem_copy( &pAssocRsp->RICData[cnt], &ar.RICDataDesc[cnt],
@@ -2897,9 +3235,8 @@ sirConvertAssocRespFrame2Struct(tpAniSirGlobal pMac,
     if (ar.ExtCap.present)
     {
         struct s_ext_cap *p_ext_cap;
-
-        vos_mem_copy(&pAssocRsp->ExtCap.bytes, &ar.ExtCap.bytes,
-                     ar.ExtCap.num_bytes);
+        vos_mem_copy( &pAssocRsp->ExtCap, &ar.ExtCap,
+                sizeof(tDot11fIEExtCap));
         p_ext_cap = (struct s_ext_cap *)&pAssocRsp->ExtCap.bytes;
         limLog(pMac, LOG1,
                FL("ExtCap present, timingMeas: %d Initiator: %d Responder: %d"),
@@ -2914,7 +3251,35 @@ sirConvertAssocRespFrame2Struct(tpAniSirGlobal pMac,
         limLog( pMac, LOG1, FL("Received Assoc Response with Qos Map Set"));
         limLogQosMapSet(pMac, &pAssocRsp->QosMapSet);
     }
+    pAssocRsp->vendor2_ie.present = ar.vendor2_ie.present;
+    if (ar.vendor2_ie.present) {
+            pAssocRsp->vendor2_ie.type = ar.vendor2_ie.type;
+            pAssocRsp->vendor2_ie.sub_type = ar.vendor2_ie.sub_type;
+    }
 
+    if (ar.vendor2_ie.VHTCaps.present) {
+            vos_mem_copy(&pAssocRsp->vendor2_ie.VHTCaps,
+                            &ar.vendor2_ie.VHTCaps,
+                            sizeof(tDot11fIEVHTCaps));
+            limLog(pMac, LOGE,
+            FL("Received Assoc Response with Vendor specific VHT Cap"));
+            limLogVHTCap(pMac, &pAssocRsp->VHTCaps);
+    }
+    if (ar.vendor2_ie.VHTOperation.present) {
+            vos_mem_copy(&pAssocRsp->vendor2_ie.VHTOperation,
+                            &ar.vendor2_ie.VHTOperation,
+                            sizeof(tDot11fIEVHTOperation));
+            limLog(pMac, LOGE,
+            FL("Received Assoc Response with Vendor specific VHT Oper"));
+            limLogVHTOperation(pMac, &pAssocRsp->VHTOperation);
+    }
+
+    if (ar.QComVendorIE.present &&
+        ar.QComVendorIE.Sub20Info.present)
+            pAssocRsp->vendor_sub20_capability =
+             ar.QComVendorIE.Sub20Info.capability;
+
+    fils_convert_assoc_rsp_frame2_struct(pMac, &ar, pAssocRsp);
     return eSIR_SUCCESS;
 
 } // End sirConvertAssocRespFrame2Struct.
@@ -3101,8 +3466,8 @@ sirConvertReassocReqFrame2Struct(tpAniSirGlobal pMac,
     {
         struct s_ext_cap *p_ext_cap = (struct s_ext_cap *)
                                        &ar.ExtCap.bytes;
-        vos_mem_copy(&pAssocReq->ExtCap.bytes, &ar.ExtCap.bytes,
-                     ar.ExtCap.num_bytes);
+        vos_mem_copy( &pAssocReq->ExtCap, &ar.ExtCap,
+                sizeof(tDot11fIEExtCap));
         limLog(pMac, LOG1,
                FL("ExtCap present, timingMeas: %d Initiator: %d Responder: %d"),
                p_ext_cap->timingMeas, p_ext_cap->fine_time_meas_initiator,
@@ -3144,6 +3509,8 @@ sirFillBeaconMandatoryIEforEseBcnReport(tpAniSirGlobal   pMac,
         limLog(pMac, LOGE, FL("Failed to allocate memory"));
         return eSIR_FAILURE;
     }
+    vos_mem_zero(pBies, sizeof(tDot11fBeaconIEs));
+
     // delegate to the framesc-generated code,
     status = dot11fUnpackBeaconIEs( pMac, pPayload, nPayload, pBies );
 
@@ -3273,15 +3640,19 @@ sirFillBeaconMandatoryIEforEseBcnReport(tpAniSirGlobal   pMac,
         retStatus = eSIR_FAILURE;
         goto err_bcnrep;
       }
-      *pos = SIR_MAC_RATESET_EID;
-      pos++;
-      *pos = eseBcnReportMandatoryIe.supportedRates.numRates;
-      pos++;
-      vos_mem_copy(pos,
+      if (eseBcnReportMandatoryIe.supportedRates.numRates <=
+            SIR_MAC_RATESET_EID_MAX) {
+          *pos = SIR_MAC_RATESET_EID;
+          pos++;
+          *pos = eseBcnReportMandatoryIe.supportedRates.numRates;
+          pos++;
+          vos_mem_copy(pos,
                    (tANI_U8*)eseBcnReportMandatoryIe.supportedRates.rate,
                    eseBcnReportMandatoryIe.supportedRates.numRates);
-      pos += eseBcnReportMandatoryIe.supportedRates.numRates;
-      freeBytes -= (1 + 1 + eseBcnReportMandatoryIe.supportedRates.numRates);
+          pos += eseBcnReportMandatoryIe.supportedRates.numRates;
+          freeBytes -= (1 + 1 +
+                   eseBcnReportMandatoryIe.supportedRates.numRates);
+      }
     }
 
     /* Fill FH Parameter set IE */
@@ -3426,6 +3797,30 @@ err_bcnrep:
 
 #endif /* FEATURE_WLAN_ESE_UPLOAD */
 
+#ifdef WLAN_FEATURE_FILS_SK
+/**
+ * sir_parse_fils_beacon_ie: update fils params from beacon IEs
+ * @beacon_struct: pointer to tpSirProbeRespBeacon
+ * @beacon_ie: pointer to tDot11fBeaconIEs
+ *
+ * Return: None
+ */
+static void sir_parse_fils_beacon_ie(tpSirProbeRespBeacon beacon_struct,
+                tDot11fBeaconIEs *beacon_ie)
+{
+    if (!beacon_ie->fils_indication.present)
+        return;
+
+    update_fils_data(&beacon_struct->fils_ind,
+            &beacon_ie->fils_indication);
+}
+#else
+static inline void sir_parse_fils_beacon_ie(tpSirProbeRespBeacon beacon_struct,
+            tDot11fBeaconIEs *beacon_ie)
+{
+}
+#endif
+
 tSirRetStatus
 sirParseBeaconIE(tpAniSirGlobal        pMac,
                  tpSirProbeRespBeacon  pBeaconStruct,
@@ -3448,6 +3843,8 @@ sirParseBeaconIE(tpAniSirGlobal        pMac,
         limLog(pMac, LOGE, FL("Failed to allocate memory"));
         return eSIR_FAILURE;
     }
+    vos_mem_zero(pBies, sizeof(tDot11fBeaconIEs));
+
     // delegate to the framesc-generated code,
     status = dot11fUnpackBeaconIEs( pMac, pPayload, nPayload, pBies );
 
@@ -3679,12 +4076,71 @@ sirParseBeaconIE(tpAniSirGlobal        pMac,
     }
 
     pBeaconStruct->Vendor1IEPresent = pBies->Vendor1IE.present;
-    pBeaconStruct->Vendor2IEPresent = pBies->Vendor2IE.present;
     pBeaconStruct->Vendor3IEPresent = pBies->Vendor3IE.present;
+    if (pBies->ExtCap.present) {
+        vos_mem_copy( &pBeaconStruct->ExtCap, &pBies->ExtCap,
+                sizeof(tDot11fIEExtCap));
+    }
+
+    pBeaconStruct->vendor2_ie.present = pBies->vendor2_ie.present;
+    if (pBies->vendor2_ie.present) {
+            pBeaconStruct->vendor2_ie.type = pBies->vendor2_ie.type;
+            pBeaconStruct->vendor2_ie.sub_type = pBies->vendor2_ie.sub_type;
+    }
+
+    if (pBies->vendor2_ie.VHTCaps.present) {
+            pBeaconStruct->vendor2_ie.VHTCaps.present = 1;
+            vos_mem_copy(&pBeaconStruct->vendor2_ie.VHTCaps,
+                            &pBies->vendor2_ie.VHTCaps,
+                            sizeof(tDot11fIEVHTCaps));
+    }
+    if (pBies->vendor2_ie.VHTOperation.present) {
+            pBeaconStruct->vendor2_ie.VHTOperation.present = 1;
+            vos_mem_copy(&pBeaconStruct->vendor2_ie.VHTOperation,
+                            &pBies->vendor2_ie.VHTOperation,
+                                sizeof(tDot11fIEVHTOperation));
+    }
+
+    if (pBies->QComVendorIE.present &&
+        pBies->QComVendorIE.Sub20Info.present)
+            pBeaconStruct->vendor_sub20_capability =
+                       pBies->QComVendorIE.Sub20Info.capability;
+
+#ifdef WLAN_FEATURE_FILS_SK
+    sir_parse_fils_beacon_ie(pBeaconStruct, pBies);
+#endif
+
+    sir_copy_hs20_ie(&pBeaconStruct->hs20vendor_ie, &pBies->hs20vendor_ie);
 
     vos_mem_free(pBies);
     return eSIR_SUCCESS;
 } // End sirParseBeaconIE.
+
+#ifdef WLAN_FEATURE_FILS_SK
+/**
+ * sir_convert_fils_data_to_beacon_struct: update fils params from beacon
+ * @beacon_struct: pointer to tpSirProbeRespBeacon
+ * @beacon: pointer to tDot11fBeacon
+ *
+ * Return: None
+ */
+static void
+sir_convert_fils_data_to_beacon_struct(tpSirProbeRespBeacon beacon_struct,
+                    tDot11fBeacon *beacon)
+{
+    if (!beacon->fils_indication.present)
+        return;
+
+    update_fils_data(&beacon_struct->fils_ind,
+            &beacon->fils_indication);
+}
+#else
+static inline void
+sir_convert_fils_data_to_beacon_struct(tpSirProbeRespBeacon beacon_struct,
+                    tDot11fBeacon *beacon)
+{
+}
+#endif
 
 tSirRetStatus
 sirConvertBeaconFrame2Struct(tpAniSirGlobal       pMac,
@@ -3732,13 +4188,6 @@ sirConvertBeaconFrame2Struct(tpAniSirGlobal       pMac,
         PELOG2(sirDumpBuf(pMac, SIR_DBG_MODULE_ID, LOG2, pPayload, nPayload);)
         vos_mem_free(pBeacon);
         return eSIR_FAILURE;
-    }
-    else if ( DOT11F_WARNED( status ) )
-    {
-      limLog(pMac, LOGW,
-                 FL("There were warnings while unpacking Beacon IEs (0x%08x, %d bytes):"),
-                 status, nPayload);
-        PELOG2(sirDumpBuf(pMac, SIR_DBG_MODULE_ID, LOG2, pPayload, nPayload);)
     }
 
     // & "transliterate" from a 'tDot11fBeacon' to a 'tSirProbeRespBeacon'...
@@ -4009,24 +4458,104 @@ sirConvertBeaconFrame2Struct(tpAniSirGlobal       pMac,
     }
 
     pBeaconStruct->Vendor1IEPresent = pBeacon->Vendor1IE.present;
-    pBeaconStruct->Vendor2IEPresent = pBeacon->Vendor2IE.present;
     pBeaconStruct->Vendor3IEPresent = pBeacon->Vendor3IE.present;
+
+    pBeaconStruct->vendor2_ie.present = pBeacon->vendor2_ie.present;
+    if (pBeacon->vendor2_ie.present) {
+            pBeaconStruct->vendor2_ie.type = pBeacon->vendor2_ie.type;
+            pBeaconStruct->vendor2_ie.sub_type =
+                    pBeacon->vendor2_ie.sub_type;
+    }
+    if (pBeacon->vendor2_ie.present) {
+            PELOG1(limLog(pMac, LOG1,
+            FL("Vendor Specific VHT caps present in Beacon Frame!"));
+                  )
+    }
+    if (pBeacon->vendor2_ie.VHTCaps.present) {
+            vos_mem_copy(&pBeaconStruct->vendor2_ie.VHTCaps,
+                            &pBeacon->vendor2_ie.VHTCaps,
+                            sizeof(tDot11fIEVHTCaps));
+    }
+    if (pBeacon->vendor2_ie.VHTOperation.present) {
+            vos_mem_copy(&pBeaconStruct->vendor2_ie.VHTOperation,
+                            &pBeacon->VHTOperation,
+                            sizeof(tDot11fIEVHTOperation));
+    }
+
 
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
     if(pBeacon->QComVendorIE.present) {
         pBeaconStruct->AvoidChannelIE.present =
             pBeacon->QComVendorIE.present;
-        pBeaconStruct->AvoidChannelIE.type =
-            pBeacon->QComVendorIE.type;
-        pBeaconStruct->AvoidChannelIE.channel =
-            pBeacon->QComVendorIE.channel;
+        pBeaconStruct->AvoidChannelIE.MccChanInfo.present =
+            pBeacon->QComVendorIE.MccChanInfo.present;
+        pBeaconStruct->AvoidChannelIE.MccChanInfo.channel =
+            pBeacon->QComVendorIE.MccChanInfo.channel;
     }
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
+
+    if (pBeacon->QComVendorIE.present &&
+        pBeacon->QComVendorIE.Sub20Info.present &&
+        pBeacon->QComVendorIE.Sub20Info.csa_chanwidth) {
+            pBeaconStruct->vendor_sub20_capability =
+                 pBeacon->QComVendorIE.Sub20Info.capability;
+    }
+
+#ifdef WLAN_FEATURE_FILS_SK
+    sir_convert_fils_data_to_beacon_struct(pBeaconStruct, pBeacon);
+#endif
+
+    sir_copy_hs20_ie(&pBeaconStruct->hs20vendor_ie, &pBeacon->hs20vendor_ie);
 
     vos_mem_free(pBeacon);
     return eSIR_SUCCESS;
 
 } // End sirConvertBeaconFrame2Struct.
+
+#ifdef WLAN_FEATURE_FILS_SK
+/* sir_update_auth_frame2_struct_fils_conf: API to update fils info from auth
+ * packet type 2
+ * @auth: auth packet pointer received from AP
+ * @auth_frame: data structure needs to be updated
+ *
+ * Return: None
+ */
+static void sir_update_auth_frame2_struct_fils_conf(tDot11fAuthentication *auth,
+                tpSirMacAuthFrameBody auth_frame)
+{
+    if (auth->AuthAlgo.algo != eSIR_FILS_SK_WITHOUT_PFS)
+        return;
+
+    if (auth->fils_assoc_delay_info.present)
+        auth_frame->assoc_delay_info =
+            auth->fils_assoc_delay_info.assoc_delay_info;
+
+    if (auth->fils_session.present)
+        vos_mem_copy(auth_frame->session, auth->fils_session.session,
+            SIR_FILS_SESSION_LENGTH);
+
+    if (auth->fils_nonce.present)
+        vos_mem_copy(auth_frame->nonce, auth->fils_nonce.nonce,
+            SIR_FILS_NONCE_LENGTH);
+
+    if (auth->fils_wrapped_data.present) {
+        vos_mem_copy(auth_frame->wrapped_data,
+            auth->fils_wrapped_data.wrapped_data,
+            auth->fils_wrapped_data.num_wrapped_data);
+        auth_frame->wrapped_data_len =
+            auth->fils_wrapped_data.num_wrapped_data;
+    }
+    if (auth->RSNOpaque.present) {
+        vos_mem_copy(auth_frame->rsn_ie.info, auth->RSNOpaque.data,
+            auth->RSNOpaque.num_data);
+        auth_frame->rsn_ie.length = auth->RSNOpaque.num_data;
+    }
+}
+#else
+static void sir_update_auth_frame2_struct_fils_conf(tDot11fAuthentication *auth,
+                tpSirMacAuthFrameBody auth_frame)
+{ }
+#endif
 
 tSirRetStatus
 sirConvertAuthFrame2Struct(tpAniSirGlobal        pMac,
@@ -4068,6 +4597,7 @@ sirConvertAuthFrame2Struct(tpAniSirGlobal        pMac,
         pAuth->length = auth.ChallengeText.num_text;
         vos_mem_copy( pAuth->challengeText, auth.ChallengeText.text, auth.ChallengeText.num_text );
     }
+    sir_update_auth_frame2_struct_fils_conf(&auth, pAuth);
 
     return eSIR_SUCCESS;
 
@@ -4513,10 +5043,10 @@ sirConvertQosMapConfigureFrame2Struct(tpAniSirGlobal    pMac,
     tDot11fQosMapConfigure mapConfigure;
     tANI_U32 status;
     status = dot11fUnpackQosMapConfigure(pMac, pFrame, nFrame, &mapConfigure);
-    if ( DOT11F_FAILED( status ) )
+    if ( DOT11F_FAILED( status ) || !mapConfigure.QosMapSet.present )
     {
         dot11fLog(pMac, LOGE,
-                  FL("Failed to parse Qos Map Config frame(0x%08x, %d bytes):"),
+                  FL("Failed to parse or QosMapSet not present(0x%08x, %d bytes):"),
                   status, nFrame);
         PELOG2(sirDumpBuf(pMac, SIR_DBG_MODULE_ID, LOG2, pFrame, nFrame);)
         return eSIR_FAILURE;
@@ -5343,16 +5873,22 @@ tSirRetStatus PopulateDot11fAssocResWscIE(tpAniSirGlobal pMac,
 {
     tDot11fIEWscAssocReq parsedWscAssocReq = { 0, };
     tANI_U8         *wscIe;
+    tANI_U32 status;
 
 
     wscIe = limGetWscIEPtr(pMac, pRcvdAssocReq->addIE.addIEdata, pRcvdAssocReq->addIE.length);
     if(wscIe != NULL)
     {
         // retreive WSC IE from given AssocReq
-        dot11fUnpackIeWscAssocReq( pMac,
+        status = dot11fUnpackIeWscAssocReq( pMac,
                                     wscIe + 2 + 4,  // EID, length, OUI
                                     wscIe[ 1 ] - 4, // length without OUI
                                     &parsedWscAssocReq );
+        if (!DOT11F_SUCCEEDED(status))
+        {
+            limLog(pMac, LOGE, FL("Unpack wsc failed status: (0x%08x)"), status);
+            return eSIR_HAL_INPUT_INVALID;
+        }
         pDot11f->present = 1;
         // version has to be 0x10
         pDot11f->Version.present = 1;
@@ -5592,15 +6128,15 @@ sap_auth_offload_construct_rsn_opaque( tDot11fIERSN *pdot11f_rsn,
             }
         }
 
-        if (pdot11f_rsn->akm_suite_count) {
-            element_len = sizeof(pdot11f_rsn->akm_suite_count);
-            vos_mem_copy(ptr, &pdot11f_rsn->akm_suite_count, element_len);
+        if (pdot11f_rsn->akm_suite_cnt) {
+            element_len = sizeof(pdot11f_rsn->akm_suite_cnt);
+            vos_mem_copy(ptr, &pdot11f_rsn->akm_suite_cnt, element_len);
             ptr += element_len;
             data_len += element_len;
-            for (count = 0; count < pdot11f_rsn->akm_suite_count; count++) {
+            for (count = 0; count < pdot11f_rsn->akm_suite_cnt; count++) {
                 element_len = DOT11F_RSN_OUI_SIZE;
                 vos_mem_copy(ptr,
-                             &pdot11f_rsn->akm_suites[count][0],
+                             &pdot11f_rsn->akm_suite[count][0],
                              element_len);
                 ptr += element_len;
                 data_len += element_len;
@@ -5639,8 +6175,8 @@ sap_auth_offload_update_rsn_ie( tpAniSirGlobal pmac,
             vos_mem_copy(&(pdot11f_rsn->pwise_cipher_suites[0][0]),
                          &sirRSNOui[DOT11F_RSN_CSE_CCMP][0],
                          DOT11F_RSN_OUI_SIZE);
-            pdot11f_rsn->akm_suite_count = 1;
-            vos_mem_copy(&(pdot11f_rsn->akm_suites[0][0]),
+            pdot11f_rsn->akm_suite_cnt = 1;
+            vos_mem_copy(&(pdot11f_rsn->akm_suite[0][0]),
                          &sirRSNOui[DOT11F_RSN_CSE_TKIP][0],
                          DOT11F_RSN_OUI_SIZE);
             pdot11f_rsn->pmkid_count = 0;

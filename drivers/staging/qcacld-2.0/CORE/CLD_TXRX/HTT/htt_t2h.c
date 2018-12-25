@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -53,6 +53,8 @@
 #include <ol_txrx_ctrl_api.h>
 #include <ol_txrx_peer_find.h>
 #include <ol_ctrl_txrx_api.h>
+#include "vos_utils.h"
+
 /*--- target->host HTT message dispatch function ----------------------------*/
 
 #ifndef DEBUG_CREDIT
@@ -90,6 +92,8 @@ htt_t2h_mac_addr_deswizzle(u_int8_t *tgt_mac_addr, u_int8_t *buffer)
 
 #if defined(CONFIG_HL_SUPPORT)
 #define HTT_RX_FRAG_SET_LAST_MSDU(pdev, msg) /* no-op */
+#define HTT_FAIL_NOTIFY_BREAK_CHECK(status) \
+	((status) == htt_tx_status_fail_notify)
 #else
 static void HTT_RX_FRAG_SET_LAST_MSDU(
     struct htt_pdev_t *pdev, adf_nbuf_t msg)
@@ -135,7 +139,11 @@ static void HTT_RX_FRAG_SET_LAST_MSDU(
     rx_desc->msdu_end.last_msdu = 1;
     adf_nbuf_map(pdev->osdev, msdu, ADF_OS_DMA_FROM_DEVICE);
 }
+
+#define HTT_FAIL_NOTIFY_BREAK_CHECK(status)  0
 #endif /* CONFIG_HL_SUPPORT */
+
+#define MAX_TARGET_TX_CREDIT    204800
 
 /* Target to host Msg/event  handler  for low priority messages*/
 void
@@ -161,14 +169,25 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
             }
             /* abort if the target is incompatible with the host */
             adf_os_assert(pdev->tgt_ver.major == HTT_CURRENT_VERSION_MAJOR);
+            if (pdev->tgt_ver.minor != HTT_CURRENT_VERSION_MINOR) {
+                adf_os_print(
+                    "*** Warning: host/target HTT versions are different, "
+                    "though compatible!\n");
+            }
             break;
         }
     case HTT_T2H_MSG_TYPE_RX_FLUSH:
         {
             u_int16_t peer_id;
             u_int8_t tid;
-            int seq_num_start, seq_num_end;
+            u_int16_t seq_num_start, seq_num_end;
             enum htt_rx_flush_action action;
+
+            if (adf_nbuf_len(htt_t2h_msg) < HTT_RX_FLUSH_BYTES) {
+                adf_print("invalid nbuff len");
+                WARN_ON(1);
+                break;
+            }
 
             peer_id = HTT_RX_FLUSH_PEER_ID_GET(*msg_word);
             tid = HTT_RX_FLUSH_TID_GET(*msg_word);
@@ -187,28 +206,73 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
         }
     case  HTT_T2H_MSG_TYPE_RX_OFFLOAD_DELIVER_IND:
         {
-            int msdu_cnt;
+            u_int16_t msdu_cnt;
             msdu_cnt = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_CNT_GET(*msg_word);
             ol_rx_offload_deliver_ind_handler(
                 pdev->txrx_pdev,
                 htt_t2h_msg,
                 msdu_cnt);
-            break;
+            if (pdev->cfg.is_high_latency) {
+                /* return here for HL to avoid double free on htt_t2h_msg */
+                return;
+            } else {
+                break;
+            }
         }
     case  HTT_T2H_MSG_TYPE_RX_FRAG_IND:
         {
             u_int16_t peer_id;
             u_int8_t tid;
+            int msg_len = adf_nbuf_len(htt_t2h_msg);
+
+            if (msg_len < HTT_RX_FRAG_IND_BYTES) {
+                adf_print("invalid nbuff len");
+                WARN_ON(1);
+                break;
+            }
 
             peer_id = HTT_RX_FRAG_IND_PEER_ID_GET(*msg_word);
             tid = HTT_RX_FRAG_IND_EXT_TID_GET(*msg_word);
             HTT_RX_FRAG_SET_LAST_MSDU(pdev, htt_t2h_msg);
+
+            /* If packet len is invalid, will discard this frame. */
+            if (pdev->cfg.is_high_latency) {
+                u_int32_t rx_pkt_len = 0;
+
+                rx_pkt_len = adf_nbuf_len(htt_t2h_msg);
+
+                if (rx_pkt_len < (HTT_RX_FRAG_IND_BYTES +
+                    sizeof(struct hl_htt_rx_ind_base)+
+                    sizeof(struct ieee80211_frame))) {
+
+                    adf_os_print("%s: invalid packet len, %u\n",
+                                __FUNCTION__,
+                                rx_pkt_len);
+                    /*
+                     * This buf will be freed before
+                     * exiting this function.
+                     */
+                    break;
+                }
+            }
 
             ol_rx_frag_indication_handler(
                 pdev->txrx_pdev,
                 htt_t2h_msg,
                 peer_id,
                 tid);
+
+            if (pdev->cfg.is_high_latency) {
+               /*
+                * For high latency solution, HTT_T2H_MSG_TYPE_RX_FRAG_IND
+                * message and RX packet share the same buffer. All buffer will
+                * be freed by ol_rx_frag_indication_handler or upper layer to
+                * avoid double free issue.
+                *
+                */
+                return;
+            }
+
             break;
         }
     case HTT_T2H_MSG_TYPE_RX_ADDBA:
@@ -249,10 +313,24 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
             u_int16_t peer_id;
             u_int8_t vdev_id;
 
+            if (adf_nbuf_len(htt_t2h_msg) < HTT_RX_PEER_MAP_BYTES) {
+                adf_print("invalid nbuff len");
+                WARN_ON(1);
+                break;
+            }
+
             peer_id = HTT_RX_PEER_MAP_PEER_ID_GET(*msg_word);
             vdev_id = HTT_RX_PEER_MAP_VDEV_ID_GET(*msg_word);
             peer_mac_addr = htt_t2h_mac_addr_deswizzle(
                 (u_int8_t *) (msg_word+1), &mac_addr_deswizzle_buf[0]);
+
+            if (peer_id > ol_cfg_max_peer_id(pdev->ctrl_pdev)) {
+                adf_os_print("%s: HTT_T2H_MSG_TYPE_PEER_MAP,"
+                            "invalid peer_id, %u\n",
+                            __FUNCTION__,
+                            peer_id);
+                break;
+            }
 
             ol_rx_peer_map_handler(
                 pdev->txrx_pdev, peer_id, vdev_id, peer_mac_addr, 1/*can tx*/);
@@ -261,7 +339,22 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
     case HTT_T2H_MSG_TYPE_PEER_UNMAP:
         {
             u_int16_t peer_id;
+
+            if (adf_nbuf_len(htt_t2h_msg) < HTT_RX_PEER_UNMAP_BYTES) {
+                adf_print("invalid nbuff len");
+                WARN_ON(1);
+                break;
+            }
+
             peer_id = HTT_RX_PEER_UNMAP_PEER_ID_GET(*msg_word);
+
+            if (peer_id > ol_cfg_max_peer_id(pdev->ctrl_pdev)) {
+                adf_os_print("%s: HTT_T2H_MSG_TYPE_PEER_UNMAP,"
+                            "invalid peer_id, %u\n",
+                            __FUNCTION__,
+                            peer_id);
+                break;
+            }
 
             ol_rx_peer_unmap_handler(pdev->txrx_pdev, peer_id);
             break;
@@ -271,6 +364,12 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
             u_int16_t peer_id;
             enum htt_sec_type sec_type;
             int is_unicast;
+
+            if (adf_nbuf_len(htt_t2h_msg) < HTT_SEC_IND_BYTES) {
+                adf_print("invalid nbuff len");
+                WARN_ON(1);
+                break;
+            }
 
             peer_id = HTT_SEC_IND_PEER_ID_GET(*msg_word);
             sec_type = HTT_SEC_IND_SEC_TYPE_GET(*msg_word);
@@ -289,9 +388,11 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
 
             if (pdev->cfg.is_high_latency) {
                 if (!pdev->cfg.default_tx_comp_req) {
+                    HTT_TX_MUTEX_ACQUIRE(&pdev->credit_mutex);
                     adf_os_atomic_add(credit_delta,
                                       &pdev->htt_tx_credit.target_delta);
                     credit_delta = htt_tx_credit_update(pdev);
+                    HTT_TX_MUTEX_RELEASE(&pdev->credit_mutex);
                 }
                 if (credit_delta) {
                     ol_tx_target_credit_update(pdev->txrx_pdev, credit_delta);
@@ -308,11 +409,10 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
 #if TXRX_STATS_LEVEL != TXRX_STATS_LEVEL_OFF
     case HTT_T2H_MSG_TYPE_STATS_CONF:
         {
-            u_int64_t cookie;
+            u_int8_t cookie;
             u_int8_t *stats_info_list;
 
             cookie = *(msg_word + 1);
-            cookie |= ((u_int64_t) (*(msg_word + 2))) << 32;
 
             stats_info_list = (u_int8_t *) (msg_word + 3);
             htc_pm_runtime_put(pdev->htc_pdev);
@@ -355,17 +455,70 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
     {
         u_int32_t htt_credit_delta_abs;
         int32_t htt_credit_delta;
-        int sign;
+        int sign, old_credit;
+        int delta2 = 0;
+
+        if (adf_nbuf_len(htt_t2h_msg) < HTT_TX_CREDIT_MSG_BYTES) {
+            adf_print("invalid nbuff len");
+            WARN_ON(1);
+            break;
+        }
 
         htt_credit_delta_abs = HTT_TX_CREDIT_DELTA_ABS_GET(*msg_word);
         sign = HTT_TX_CREDIT_SIGN_BIT_GET(*msg_word) ? -1 : 1;
         htt_credit_delta = sign * htt_credit_delta_abs;
 
+        old_credit = adf_os_atomic_read(&pdev->htt_tx_credit.target_delta);
+        if (((old_credit + htt_credit_delta) > MAX_TARGET_TX_CREDIT) ||
+            ((old_credit + htt_credit_delta) < -MAX_TARGET_TX_CREDIT)) {
+            adf_os_print("%s: invalid credit update,old_credit=%d,"
+                        "htt_credit_delta=%d\n",
+                        __FUNCTION__,
+                        old_credit,
+                        htt_credit_delta);
+            break;
+        }
+
         if (pdev->cfg.is_high_latency &&
             !pdev->cfg.default_tx_comp_req) {
+            HTT_TX_MUTEX_ACQUIRE(&pdev->credit_mutex);
             adf_os_atomic_add(htt_credit_delta,
                               &pdev->htt_tx_credit.target_delta);
             htt_credit_delta = htt_tx_credit_update(pdev);
+
+
+            if (htt_credit_delta >= 0) {
+                if ((adf_os_atomic_read(&pdev->txrx_pdev->target_tx_credit) +
+                    htt_credit_delta) < HTT_MAX_BUS_CREDIT) {
+                    if (adf_os_atomic_read(&pdev->htt_tx_credit.target_delta) > 0) {
+                        delta2 = HTT_MAX_BUS_CREDIT -
+                                adf_os_atomic_read(&pdev->txrx_pdev->target_tx_credit)
+                                - htt_credit_delta;
+                        delta2 = (adf_os_atomic_read(&pdev->htt_tx_credit.target_delta) < delta2) ?
+                                adf_os_atomic_read(&pdev->htt_tx_credit.target_delta) : delta2;
+
+                        adf_os_atomic_add(-delta2, &pdev->htt_tx_credit.target_delta);
+                        adf_os_atomic_add(delta2, &pdev->txrx_pdev->target_tx_credit);
+                        adf_os_atomic_add(-delta2, &pdev->htt_tx_credit.bus_delta);
+                    }
+                }
+            } else {
+                if (adf_os_atomic_read(&pdev->txrx_pdev->target_tx_credit) < HTT_MAX_BUS_CREDIT) {
+                    if (adf_os_atomic_read(&pdev->htt_tx_credit.target_delta) > 0) {
+                        delta2 = HTT_MAX_BUS_CREDIT -
+                                adf_os_atomic_read(&pdev->txrx_pdev->target_tx_credit);
+                        delta2 = (adf_os_atomic_read(&pdev->htt_tx_credit.target_delta) < delta2) ?
+                                adf_os_atomic_read(&pdev->htt_tx_credit.target_delta) : delta2;
+
+                        adf_os_atomic_add(-delta2, &pdev->htt_tx_credit.target_delta);
+                        adf_os_atomic_add(delta2, &pdev->txrx_pdev->target_tx_credit);
+                        adf_os_atomic_add(-delta2, &pdev->htt_tx_credit.bus_delta);
+                    }
+                }
+            }
+
+
+            HTT_TX_MUTEX_RELEASE(&pdev->credit_mutex);
         }
 
         HTT_TX_GROUP_CREDIT_PROCESS(pdev, msg_word);
@@ -377,6 +530,96 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
          * even if htt_credit_delta == 0.
          */
         ol_tx_credit_completion_handler(pdev->txrx_pdev, htt_credit_delta);
+        break;
+    }
+
+    case HTT_T2H_MSG_TYPE_CHAN_CALDATA:
+    {
+        u8 msg_subtype;
+        u8 chksum_valid;
+        u32 freq;
+        u8 cali_data_idx;
+        u16 center_freq1;
+        u16 center_freq2;
+        u16 payloadsize;
+        u8 frag_num;
+        u8 append_flag;
+        adf_nbuf_t buf;
+        u8 *msg_start_ptr;
+
+        msg_start_ptr = (u8 *)msg_word;
+        msg_subtype = HTT_CHAN_CALDATA_MSG_SUB_TYPE_GET(*msg_word);
+        chksum_valid = HTT_CHAN_CALDATA_MSG_CHKSUM_V_GET(*msg_word);
+        frag_num = HTT_CHAN_CALDATA_MSG_FRAG_IDX_GET(*msg_word);
+        if (frag_num > CALI_FRAG_IDX_MAX || frag_num == 0) {
+            adf_os_print("invalid frag_num %d", frag_num);
+            break;
+        }
+        append_flag = HTT_CHAN_CALDATA_MSG_APPENDING_GET(*msg_word);
+        msg_word++;
+        freq = HTT_CHAN_CALDATA_MSG_MHZ_GET(*msg_word);
+        if (HTT_T2H_MSG_CHAN_CALDATA_UPLOAD == msg_subtype) {
+            payloadsize = HTT_CHAN_CALDATA_MSG_PLD_SIZE_GET(*msg_word);
+            msg_word++;
+            center_freq1 = HTT_CHAN_CALDATA_MSG_FREQ1_GET(*msg_word);
+            center_freq2 = HTT_CHAN_CALDATA_MSG_FREQ2_GET(*msg_word);
+            cali_data_idx = get_chan_cali_data_index(freq);
+            if (cali_data_idx >= MAX_WIFI_CHAN_CNT) {
+                adf_os_print("error cali_data_idx %d", cali_data_idx);
+                break;
+            }
+            if ((sizeof(struct htt_chan_caldata_msg) + payloadsize - 1) > CHAN_CALI_DATA_LEN) {
+                adf_os_print("cali_data len %d exceed!", payloadsize);
+                break;
+            }
+            adf_os_print("%s: recv cali data,"
+                         "chksum_valid %u freq %u idx %d frag %d append %d"
+                         " center_freq1 %u center_freq2 %u payloadsize %u\n",
+                         __func__, chksum_valid, freq, cali_data_idx,
+                         frag_num, append_flag, center_freq1,
+                         center_freq2, payloadsize);
+
+            /*cali frag idx start from 1 not 0*/
+            buf = pdev->chan_cali_data_array[cali_data_idx].buf[frag_num - 1];
+            if (!buf) {
+                /*try to alloc buf again, as it alloc failed in the init period*/
+                pdev->chan_cali_data_array[cali_data_idx].buf[frag_num - 1] =
+                    adf_nbuf_alloc(pdev->osdev,
+                                   HTT_MSG_BUF_SIZE(CHAN_CALI_DATA_LEN),
+                                   /* reserve room for HTC header */
+                                   HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+                                   4, FALSE);
+                if (!pdev->chan_cali_data_array[cali_data_idx].buf[frag_num - 1]) {
+                    adf_os_print("no mem for restore cali data for freq %d frag %d",
+                                 freq, frag_num);
+                    break;
+                }
+                adf_os_print("additional alloc cali data for idx %d frag %d", cali_data_idx, frag_num);
+            }
+            /* set the length of the message */
+            adf_nbuf_put_tail(buf,
+                              (sizeof(struct htt_chan_caldata_msg) +
+                               payloadsize - 1));
+            /* rewind beyond alignment pad to get to the HTC header reserved area */
+            adf_nbuf_push_head(buf, HTC_HDR_ALIGNMENT_PADDING);
+
+            /* fill in the message contents */
+            pdev->chan_cali_data_array[cali_data_idx].cali_data_buf[frag_num - 1] =
+                    (u_int32_t *)adf_nbuf_data(buf);
+            adf_os_mem_copy(pdev->chan_cali_data_array[cali_data_idx].cali_data_buf[frag_num - 1],
+                            msg_start_ptr,
+                            (sizeof(struct htt_chan_caldata_msg) +
+                             payloadsize - 1));
+
+            pdev->chan_cali_data_array[cali_data_idx].payloadsize[frag_num - 1] = payloadsize;
+            pdev->chan_cali_data_array[cali_data_idx].freq = freq;
+            pdev->chan_cali_data_array[cali_data_idx].cali_data_valid[frag_num - 1] = true;
+        } else if (HTT_T2H_MSG_CHAN_CALDATA_REQ == msg_subtype) {
+            adf_os_print("firmware req freq %d cali data", freq);
+        } else {
+            adf_os_print("error HTT_T2H_MSG_TYPE_CHAN_CALDATA subtype %d", msg_subtype);
+        }
+
         break;
     }
 
@@ -416,7 +659,16 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
                 struct ol_txrx_vdev_t *vdev;
                 struct ol_txrx_peer_t *peer;
                 u_int8_t * pn_ptr;
-                u_int16_t peer_id =
+                u_int16_t peer_id;
+                int msg_len = adf_nbuf_len(htt_t2h_msg);
+
+                if (msg_len < HTT_RX_OFLD_PKT_ERR_MIC_ERR_BYTES) {
+                    adf_print("invalid nbuff len");
+                    WARN_ON(1);
+                    break;
+                }
+
+                peer_id =
                      HTT_RX_OFLD_PKT_ERR_MIC_ERR_PEER_ID_GET(*(msg_word + 1));
 
                 peer = ol_txrx_peer_find_by_id(pdev->txrx_pdev, peer_id);
@@ -454,6 +706,7 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
                 break;
             }
         }
+        break;
     }
     case HTT_T2H_MSG_TYPE_RATE_REPORT:
         {
@@ -499,6 +752,9 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
             adf_os_mem_free(report);
             break;
         }
+    case HTT_T2H_MSG_TYPE_PPDU_STATS_IND:
+        ol_ppdu_stats_ind_handler(pdev->txrx_pdev, htt_t2h_msg);
+        break;
     default:
         break;
     };
@@ -579,7 +835,7 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
             pdev->rx_ind_msdu_byte_idx = 0;
 
             if (unlikely(pdev->rx_mpdu_range_offset_words > msg_len)) {
-                adf_os_print("HTT_T2H_MSG_TYPE_RX_IND, invalid rx_mpdu_range_offset_words %d\n",
+                adf_print("HTT_T2H_MSG_TYPE_RX_IND, invalid rx_mpdu_range_offset_words %d\n",
                                       pdev->rx_mpdu_range_offset_words);
                 WARN_ON(1);
                 break;
@@ -593,14 +849,14 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
              */
             if (unlikely(calculated_msg_len <
                                      pdev->rx_mpdu_range_offset_words)) {
-                        adf_os_print("HTT_T2H_MSG_TYPE_RX_IND, invalid mpdu_ranges %u\n",
+                        adf_print("HTT_T2H_MSG_TYPE_RX_IND, invalid mpdu_ranges %u\n",
                                                 (num_mpdu_ranges *
                                                 (int)sizeof(uint32_t)));
                         WARN_ON(1);
                         break;
             }
             if (unlikely(calculated_msg_len > msg_len)) {
-                        adf_os_print("HTT_T2H_MSG_TYPE_RX_IND, invalid offset_words + mpdu_ranges %u\n",
+                        adf_print("HTT_T2H_MSG_TYPE_RX_IND, invalid offset_words + mpdu_ranges %u\n",
                                       calculated_msg_len);
                         WARN_ON(1);
                         break;
@@ -611,9 +867,14 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
                  * TODO: remove copy after stopping reuse skb on HIF layer
                  * because SDIO HIF may reuse skb before upper layer release it
                  */
-                ol_rx_indication_handler(
-                    pdev->txrx_pdev, htt_t2h_msg, peer_id, tid,
-                    num_mpdu_ranges);
+                if (VOS_MONITOR_MODE == vos_get_conparam())
+                    ol_rx_mon_indication_handler(
+                            pdev->txrx_pdev, htt_t2h_msg, peer_id, tid,
+                            num_mpdu_ranges);
+                else
+                    ol_rx_indication_handler(
+                            pdev->txrx_pdev, htt_t2h_msg, peer_id, tid,
+                            num_mpdu_ranges);
 
                 return;
             } else {
@@ -625,12 +886,29 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
         }
     case HTT_T2H_MSG_TYPE_TX_COMPL_IND:
         {
+            int old_credit;
             int num_msdus;
             enum htt_tx_status status;
+            int msg_len = adf_nbuf_len(htt_t2h_msg);
 
             /* status - no enum translation needed */
             status = HTT_TX_COMPL_IND_STATUS_GET(*msg_word);
             num_msdus = HTT_TX_COMPL_IND_NUM_GET(*msg_word);
+
+            /*
+             * each desc id will occupy 2 bytes.
+             * the 4 is for htt msg header
+             */
+            if ((num_msdus * HTT_TX_COMPL_BYTES_PER_MSDU_ID +
+                HTT_TX_COMPL_HEAD_SZ) > msg_len) {
+                adf_os_print("%s: num_msdus(%d) is invalid,"
+                            "adf_nbuf_len = %d\n",
+                            __FUNCTION__,
+                            num_msdus,
+                            msg_len);
+                break;
+            }
+
             if (num_msdus & 0x1) {
                 struct htt_tx_compl_ind_base *compl = (void *)msg_word;
 
@@ -647,22 +925,53 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
                 }
             }
 
+            /* Indicate failure status to user space */
+            ol_tx_failure_indication(pdev->txrx_pdev,
+                                     HTT_TX_COMPL_IND_TID_GET(*msg_word),
+                                     num_msdus, status);
+
             if (pdev->cfg.is_high_latency) {
-                if (!pdev->cfg.default_tx_comp_req) {
-                    int credit_delta;
-                    adf_os_atomic_add(num_msdus,
-                        &pdev->htt_tx_credit.target_delta);
-                    credit_delta = htt_tx_credit_update(pdev);
-                    if (credit_delta) {
-                        ol_tx_target_credit_update(pdev->txrx_pdev,
-                                                   credit_delta);
-                    }
+                /*
+                 * For regular frms in HL case, frms have already been
+                 * freed and tx credit has been updated. FW indicates
+                 * special message for failure MSDUs with status type
+                 * htt_tx_status_fail_notify. Once such message was
+                 * received, just break here.
+                 */
+                if (ol_cfg_tx_free_at_download(pdev->ctrl_pdev) &&
+                    HTT_FAIL_NOTIFY_BREAK_CHECK(status)) {
+                    adf_os_print("HTT TX COMPL for failed data frm.\n");
+                    break;
+                }
+
+                old_credit = adf_os_atomic_read(&pdev->htt_tx_credit.target_delta);
+                if (((old_credit + num_msdus) > MAX_TARGET_TX_CREDIT) ||
+                    ((old_credit + num_msdus) < -MAX_TARGET_TX_CREDIT)) {
+                    adf_os_print("%s: invalid credit update,old_credit=%d,"
+                                "num_msdus=%d\n",
+                                __FUNCTION__,
+                                old_credit,
+                                num_msdus);
                 } else {
-                    ol_tx_target_credit_update(pdev->txrx_pdev, num_msdus);
+                    if (!pdev->cfg.default_tx_comp_req) {
+                        int credit_delta;
+                        HTT_TX_MUTEX_ACQUIRE(&pdev->credit_mutex);
+                        adf_os_atomic_add(num_msdus,
+                            &pdev->htt_tx_credit.target_delta);
+                        credit_delta = htt_tx_credit_update(pdev);
+                        HTT_TX_MUTEX_RELEASE(&pdev->credit_mutex);
+                        if (credit_delta) {
+                            ol_tx_target_credit_update(pdev->txrx_pdev,
+                                                       credit_delta);
+                        }
+                    } else {
+                        ol_tx_target_credit_update(pdev->txrx_pdev,
+                                                   num_msdus);
+                    }
                 }
             }
             ol_tx_completion_handler(
-                pdev->txrx_pdev, num_msdus, status, msg_word + 1);
+                pdev->txrx_pdev, num_msdus, status, msg_word);
             HTT_TX_SCHED(pdev);
             break;
         }
@@ -670,7 +979,14 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
         {
             u_int16_t peer_id;
             u_int8_t tid, pn_ie_cnt, *pn_ie=NULL;
-            int seq_num_start, seq_num_end;
+            u_int16_t seq_num_start, seq_num_end;
+            int msg_len = adf_nbuf_len(htt_t2h_msg);
+
+            if (msg_len < HTT_RX_PN_IND_BYTES) {
+                adf_print("invalid nbuff len");
+                WARN_ON(1);
+                break;
+            }
 
             /*First dword */
             peer_id = HTT_RX_PN_IND_PEER_ID_GET(*msg_word);
@@ -681,6 +997,13 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
             seq_num_start = HTT_RX_PN_IND_SEQ_NUM_START_GET(*msg_word);
             seq_num_end = HTT_RX_PN_IND_SEQ_NUM_END_GET(*msg_word);
             pn_ie_cnt = HTT_RX_PN_IND_PN_IE_CNT_GET(*msg_word);
+
+            if (msg_len - HTT_RX_PN_IND_BYTES <
+                pn_ie_cnt * sizeof(uint8_t)) {
+                adf_print("invalid pn_ie len");
+                WARN_ON(1);
+                break;
+            }
 
             msg_word++;
             /*Third dword*/
@@ -697,8 +1020,23 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
     case HTT_T2H_MSG_TYPE_TX_INSPECT_IND:
         {
             int num_msdus;
+            int msg_len = adf_nbuf_len(htt_t2h_msg);
 
             num_msdus = HTT_TX_COMPL_IND_NUM_GET(*msg_word);
+            /*
+             * each desc id will occupy 2 bytes.
+             * the 4 is for htt msg header
+             */
+            if ((num_msdus * HTT_TX_COMPL_BYTES_PER_MSDU_ID +
+                HTT_TX_COMPL_HEAD_SZ) > msg_len) {
+                adf_os_print("%s: num_msdus(%d) is invalid,"
+                            "adf_nbuf_len = %d,inspect\n",
+                            __FUNCTION__,
+                            num_msdus,
+                            msg_len);
+                break;
+            }
+
             if (num_msdus & 0x1) {
                 struct htt_tx_compl_ind_base *compl = (void *)msg_word;
 
@@ -751,6 +1089,11 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
                                                peer_id, tid, offload_ind);
             break;
      }
+    case HTT_T2H_MSG_TYPE_MONITOR_MAC_HEADER_IND:
+        {
+            ol_rx_mon_mac_header_handler(pdev->txrx_pdev, htt_t2h_msg);
+            break;
+        }
 
     default:
         htt_t2h_lp_msg_handler(context, htt_t2h_msg);
@@ -924,6 +1267,71 @@ htt_rx_ind_rssi_dbm_chain(htt_pdev_handle pdev, adf_nbuf_t rx_ind_msg,
 }
 
 /**
+ * htt_rx_ind_noise_floor_chain() - Return the nosie floor for a chain
+ *              provided in a rx indication message.
+ * @pdev:       the HTT instance the rx data was received on
+ * @rx_ind_msg: the netbuf containing the rx indication message
+ * @chain:      the index of the chain (0-1) for DSRC
+ *
+ * Return the noise floor for a chain from an rx indication message.
+ *
+ * Return: noise floor, or HTT_NOISE_FLOOR_INVALID
+ */
+int8_t
+htt_rx_ind_noise_floor_chain(htt_pdev_handle pdev, adf_nbuf_t rx_ind_msg,
+			     int8_t chain)
+{
+	int8_t noise_floor;
+	u_int32_t *msg_word;
+
+	/* only chain0/1 used with 11p DSRC */
+	if (chain < 0 || chain > 1) {
+		return HTT_NOISE_FLOOR_INVALID;
+	}
+
+	msg_word = (u_int32_t *)
+		(adf_nbuf_data(rx_ind_msg) +
+		 HTT_RX_IND_FW_RX_PPDU_DESC_BYTE_OFFSET);
+
+	/* check if the RX_IND message contains valid rx PPDU start info */
+	if (!HTT_RX_IND_START_VALID_GET(*msg_word)) {
+		return HTT_NOISE_FLOOR_INVALID;
+	}
+
+	msg_word = (u_int32_t *)
+		(adf_nbuf_data(rx_ind_msg) + HTT_RX_IND_HDR_SUFFIX_BYTE_OFFSET);
+
+	if (chain == 0)
+		noise_floor = HTT_RX_IND_NOISE_FLOOR_CHAIN0_GET(*msg_word);
+	else if (chain == 1)
+		noise_floor = HTT_RX_IND_NOISE_FLOOR_CHAIN1_GET(*msg_word);
+
+	return noise_floor;
+}
+
+int htt_rx_ind_sig(htt_pdev_handle pdev, adf_nbuf_t rx_ind_msg,
+		   uint32_t *sig_a1, uint32_t *sig_a2, uint8_t *type)
+{
+	u_int32_t *msg_word;
+
+        msg_word = (u_int32_t *)
+           (adf_nbuf_data(rx_ind_msg) + HTT_RX_IND_FW_RX_PPDU_DESC_BYTE_OFFSET);
+
+	/* check if the RX_IND message contains valid rx PPDU start info */
+	if (!HTT_RX_IND_START_VALID_GET(*msg_word)) {
+		*sig_a1 = -1;
+		*sig_a2 = -1;
+		*type = -1;
+		return -1;
+	}
+
+	*sig_a1 = *(msg_word + 7);
+	*sig_a2 = *(msg_word + 8);
+	*type = HTT_RX_IND_PREAMBLE_TYPE_GET(*sig_a1);
+	return 0;
+}
+
+/**
  * htt_rx_ind_legacy_rate() - Return the data rate
  * @pdev:        the HTT instance the rx data was received on
  * @rx_ind_msg:  the netbuf containing the rx indication message
@@ -953,7 +1361,7 @@ htt_rx_ind_rssi_dbm_chain(htt_pdev_handle pdev, adf_nbuf_t rx_ind_msg,
  *
  * Return the data rate provided in a rx indication message.
  */
-void
+int
 htt_rx_ind_legacy_rate(htt_pdev_handle pdev, adf_nbuf_t rx_ind_msg,
     uint8_t *legacy_rate, uint8_t *legacy_rate_sel)
 {
@@ -966,11 +1374,12 @@ htt_rx_ind_legacy_rate(htt_pdev_handle pdev, adf_nbuf_t rx_ind_msg,
     if (!HTT_RX_IND_START_VALID_GET(*msg_word)) {
         *legacy_rate = -1;
         *legacy_rate_sel = -1;
-        return;
+        return -1;
     }
 
     *legacy_rate = HTT_RX_IND_LEGACY_RATE_GET(*msg_word);
     *legacy_rate_sel = HTT_RX_IND_LEGACY_RATE_SEL_GET(*msg_word);
+    return 0;
 }
 
 /**
@@ -1072,8 +1481,8 @@ void
 htt_rx_frag_ind_flush_seq_num_range(
     htt_pdev_handle pdev,
     adf_nbuf_t rx_frag_ind_msg,
-    int *seq_num_start,
-    int *seq_num_end)
+    u_int16_t *seq_num_start,
+    u_int16_t *seq_num_end)
 {
     u_int32_t *msg_word;
 

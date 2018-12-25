@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013, 2015-2016, 2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -25,9 +25,9 @@
  * to the Linux Foundation.
  */
 
+#ifndef REMOVE_PKT_LOG
 #ifndef _PKTLOG_FMT_H_
 #define _PKTLOG_FMT_H_
-#ifndef REMOVE_PKT_LOG
 
 #define CUR_PKTLOG_VER          10010  /* Packet log version */
 #define PKTLOG_MAGIC_NUM        7735225
@@ -37,9 +37,14 @@
 #endif
 
 #ifdef __linux__
+#ifdef MULTI_IF_NAME
+#define PKTLOG_PROC_DIR "ath_pktlog" MULTI_IF_NAME
+#define WLANDEV_BASENAME "cld" MULTI_IF_NAME
+#else
 #define PKTLOG_PROC_DIR "ath_pktlog"
-#define PKTLOG_PROC_SYSTEM "system"
 #define WLANDEV_BASENAME "cld"
+#endif
+#define PKTLOG_PROC_SYSTEM "system"
 #endif
 
 #ifdef WIN32
@@ -65,6 +70,7 @@ struct ath_pktlog_hdr {
     u_int16_t size;
     u_int32_t timestamp;
 }__ATTRIB_PACK;
+
 
 #define ATH_PKTLOG_HDR_FLAGS_MASK 0xffff
 #define ATH_PKTLOG_HDR_FLAGS_SHIFT 0
@@ -148,7 +154,8 @@ enum {
 #define PKTLOG_TYPE_RC_FIND     6
 #define PKTLOG_TYPE_RC_UPDATE   7
 #define PKTLOG_TYPE_TX_VIRT_ADDR 8
-#define PKTLOG_TYPE_MAX          9
+#define PKTLOG_TYPE_PKT_DUMP    10
+#define PKTLOG_TYPE_MAX         11
 
 /*#define PKTLOG_TYPE_TXCTL    0
 #define PKTLOG_TYPE_TXSTATUS 1
@@ -360,6 +367,43 @@ struct ath_pktlog_buf {
         (_rd_offset) = (((_log_size) - (_rd_offset)) >= \
                          sizeof(struct ath_pktlog_hdr)) ? _rd_offset:0;\
     } while(0)
+
+
+/**
+ * enum tx_pkt_fate - tx packet fate
+ * @TX_PKT_FATE_ACKED: Sent over air and ACKed
+ * @TX_PKT_FATE_SENT: Sent over air but not ACKed.
+ * @TX_PKT_FATE_FW_QUEUED: Queued within firmware,
+ * but not yet sent over air
+ * @TX_PKT_FATE_FW_DROP_INVALID: Dropped by firmware as invalid.
+ * E.g. bad source address, bad checksum, or invalid for current state.
+ * @TX_PKT_FATE_FW_DROP_NOBUFS: Dropped by firmware due
+ * to lack of buffer space
+ * @TX_PKT_FATE_FW_DROP_OTHER: Dropped by firmware for any other
+ * reason. Includes frames that were sent by driver to firmware, but
+ * unaccounted for by firmware.
+ * @TX_PKT_FATE_DRV_QUEUED: Queued within driver, not yet sent to firmware.
+ * @TX_PKT_FATE_DRV_DROP_INVALID: Dropped by driver as invalid.
+ * E.g. bad source address, or invalid for current state.
+ * @TX_PKT_FATE_DRV_DROP_NOBUFS: Dropped by driver due to lack of buffer space
+ * @TX_PKT_FATE_DRV_DROP_OTHER: Dropped by driver for any other reason.
+ * E.g. out of buffers.
+ *
+ * This enum has packet fate types
+ */
+
+enum tx_pkt_fate {
+	TX_PKT_FATE_ACKED,
+	TX_PKT_FATE_SENT,
+	TX_PKT_FATE_FW_QUEUED,
+	TX_PKT_FATE_FW_DROP_INVALID,
+	TX_PKT_FATE_FW_DROP_NOBUFS,
+	TX_PKT_FATE_FW_DROP_OTHER,
+	TX_PKT_FATE_DRV_QUEUED,
+	TX_PKT_FATE_DRV_DROP_INVALID,
+	TX_PKT_FATE_DRV_DROP_NOBUFS,
+	TX_PKT_FATE_DRV_DROP_OTHER,
+};
 
 #endif  /* _PKTLOG_FMT_H_ */
 #endif /* REMOVE_PKT_LOG */

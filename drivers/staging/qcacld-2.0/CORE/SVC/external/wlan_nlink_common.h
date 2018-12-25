@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -48,7 +48,7 @@
 /*---------------------------------------------------------------------------
  * Preprocessor Definitions and Constants
  *-------------------------------------------------------------------------*/
-#define WLAN_NL_MAX_PAYLOAD   256     /* maximum size for netlink message*/
+#define WLAN_NL_MAX_PAYLOAD   5120     /* maximum size for netlink message*/
 #define WLAN_NLINK_PROTO_FAMILY  NETLINK_USERSOCK
 #define WLAN_NLINK_MCAST_GRP_ID  0x01
 
@@ -98,6 +98,21 @@
 #define WLAN_SVC_WLAN_TP_IND        0x109
 #define WLAN_SVC_RPS_ENABLE_IND     0x10A
 #define WLAN_SVC_WLAN_TP_TX_IND     0x10B
+#define WLAN_SVC_WLAN_AUTO_SHUTDOWN_CANCEL_IND 0x10C
+#define WLAN_SVC_WLAN_RADIO_INDEX 0x10D
+#define WLAN_SVC_FW_SHUTDOWN_IND  0x10E
+/* Message for indicating SSR failure, currently, it's only supported
+ * by 3rd party tools, and is not processed in wlan-service/scm.
+ */
+#define WLAN_SVC_SSR_FAIL_IND     0x110
+
+/*
+ * DO NOT USE, reserved for customization,
+ * in order for customers to report customized status,
+ * range required is from 0x900 - 0x90F.
+ */
+#define WLAN_SVC_USER_CUSTOMIZED_1_IND 0x900
+#define WLAN_SVC_USER_CUSTOMIZED_16_IND 0x90F
 
 #define WLAN_SVC_MAX_SSID_LEN    32
 #define WLAN_SVC_MAX_BSSID_LEN   6
@@ -139,6 +154,41 @@ typedef struct sAniHdr {
    unsigned short length;
 } tAniHdr, tAniMsgHdr;
 
+typedef struct sAniNlMsg {
+    struct  nlmsghdr nlh;             // Netlink Header
+    int radio;                        // unit number of the radio
+    tAniHdr wmsg;                     // Airgo Message Header
+} tAniNlHdr;
+
+struct radio_index_tlv {
+    unsigned short type;
+    unsigned short length;
+    int radio;
+};
+
+/**
+ * struct channel_info - Channel information
+ * @chan_id: Channel ID
+ * @reserved0: Reserved for padding and future use
+ * @mhz: Primary 20 MHz channel frequency in MHz
+ * @band_center_freq1: Center frequency 1 in MHz
+ * @band_center_freq2: Center frequency 2 in MHz
+ * @info: Channel info
+ * @reg_info_1: Regulatory information field 1 which contains
+ *              MIN power, MAX power, reg power and reg class ID
+ * @reg_info_2: Regulatory information field 2 which contains antennamax
+ */
+struct channel_info {
+	uint32_t chan_id;
+	uint32_t reserved0;
+	uint32_t mhz;
+	uint32_t band_center_freq1;
+	uint32_t band_center_freq2;
+	uint32_t info;
+	uint32_t reg_info_1;
+	uint32_t reg_info_2;
+};
+
 struct wlan_status_data {
    uint8_t lpss_support;
    uint8_t is_on;
@@ -153,6 +203,7 @@ struct wlan_status_data {
    uint8_t channel_list[WLAN_SVC_MAX_NUM_CHAN];
    uint8_t ssid[WLAN_SVC_MAX_SSID_LEN];
    uint8_t bssid[WLAN_SVC_MAX_BSSID_LEN];
+   struct channel_info channel_info[WLAN_SVC_MAX_NUM_CHAN];
 };
 
 struct wlan_version_data {
@@ -208,4 +259,30 @@ enum wlan_tp_level {
         WLAN_SVC_TP_HIGH,
 };
 
+/* Indication to enable TCP delayed ack in TPUT indication */
+#define TCP_DEL_ACK_IND    (1 << 0)
+
+/**
+ * struct wlan_rx_tp_data - msg to TCP delayed ack and advance window scaling
+ * @level:            Throughput level.
+ * @rx_tp_flags:      Bit map of flags, for which this indcation will take
+ *                    effect, bit map for TCP_ADV_WIN_SCL and TCP_DEL_ACK_IND.
+ */
+struct wlan_rx_tp_data {
+   enum wlan_tp_level level;
+   uint16_t rx_tp_flags;
+};
+
+#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
+typedef enum sta_sap_notifications
+{
+    STA_NOTIFY_DISCONNECTED,
+    STA_NOTIFY_CONNECTED,
+    STA_NOTIFY_CSA,
+}sta_sap_notifications;
+
+struct wlan_sap_csa_info {
+   uint32_t sta_channel;
+};
+#endif//#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
 #endif //WLAN_NLINK_COMMON_H__

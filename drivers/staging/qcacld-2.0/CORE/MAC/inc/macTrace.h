@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013,2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -44,11 +44,8 @@
 
 #include "aniGlobal.h"
 
-
-
 #define MAC_TRACE_GET_MODULE_ID(data) ((data >> 8) & 0xff)
 #define MAC_TRACE_GET_MSG_ID(data)       (data & 0xffff)
-
 
 #define eLOG_NODROP_MISSED_BEACON_SCENARIO 0
 #define eLOG_PROC_DEAUTH_FRAME_SCENARIO 1
@@ -65,8 +62,6 @@ tANI_U8* macTraceGetWdaMsgString( tANI_U16 wdaMsg );
 tANI_U8* macTraceGetSmeMsgString( tANI_U16 smeMsg );
 tANI_U8* macTraceGetModuleString( tANI_U8 moduleId);
 tANI_U8* macTraceGetInfoLogString( tANI_U16 infoLog );
-eHalStatus pe_AcquireGlobalLock( tAniSirLim *psPe);
-eHalStatus pe_ReleaseGlobalLock( tAniSirLim *psPe);
 
 tANI_U8* macTraceGetHDDWlanConnState(tANI_U16 connState);
 

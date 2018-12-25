@@ -649,28 +649,28 @@ htt_t2h_tx_ppdu_log_print(
     calculated_record_size = record_size +
         hdr->mpdu_bytes_array_len * sizeof(uint16_t);
     if (calculated_record_size < record_size) {
-        adf_os_print("Overflow due to record and hdr->mpdu_bytes_array_len %u",
+        adf_os_print("Overflow due to record and hdr->mpdu_bytes_array_len %u\n",
             hdr->mpdu_bytes_array_len);
         return;
     }
     record_size = calculated_record_size;
     calculated_record_size += hdr->mpdu_msdus_array_len * sizeof(uint8_t);
     if (calculated_record_size < record_size) {
-        adf_os_print("Overflow due to hdr->mpdu_msdus_array_len %u",
+        adf_os_print("Overflow due to hdr->mpdu_msdus_array_len %u\n",
             hdr->mpdu_msdus_array_len);
         return;
     }
     record_size = calculated_record_size;
     calculated_record_size += hdr->msdu_bytes_array_len * sizeof(uint16_t);
     if (calculated_record_size < record_size) {
-        adf_os_print("Overflow due to hdr->msdu_bytes_array_len %u",
+        adf_os_print("Overflow due to hdr->msdu_bytes_array_len %u\n",
             hdr->msdu_bytes_array_len);
         return;
     }
     record_size = calculated_record_size;
     num_records = (length - sizeof(*hdr)) / record_size;
     if (num_records < 0) {
-        adf_os_print("Underflow due to length %d", length);
+        adf_os_print("Underflow due to length %d\n", length);
         return;
     }
     adf_os_print("Tx PPDU log elements:\n");
@@ -769,7 +769,7 @@ htt_t2h_tx_ppdu_log_print(
             p8 = (u_int8_t *) record;
             calculated_p8 = p8 + sizeof(struct ol_fw_tx_dbg_ppdu_base);
             if (calculated_p8 < p8) {
-                adf_os_print("Overflow due to record %p", p8);
+                adf_os_print("Overflow due to record %p\n", p8);
                 continue;
             }
             p8 = calculated_p8;
@@ -780,7 +780,7 @@ htt_t2h_tx_ppdu_log_print(
             }
             calculated_p8 += hdr->mpdu_bytes_array_len * sizeof(u_int16_t);
             if (calculated_p8 < p8) {
-                adf_os_print("Overflow due to hdr->mpdu_bytes_array_len %u",
+                adf_os_print("Overflow due to hdr->mpdu_bytes_array_len %u\n",
                     hdr->mpdu_bytes_array_len);
                 continue;
             }
@@ -792,7 +792,7 @@ htt_t2h_tx_ppdu_log_print(
             }
             calculated_p8 += hdr->mpdu_msdus_array_len * sizeof(u_int8_t);
             if (calculated_p8 < p8) {
-                adf_os_print("Overflow due to hdr->mpdu_msdus_array_len %u",
+                adf_os_print("Overflow due to hdr->mpdu_msdus_array_len %u\n",
                     hdr->mpdu_msdus_array_len);
                 continue;
             }

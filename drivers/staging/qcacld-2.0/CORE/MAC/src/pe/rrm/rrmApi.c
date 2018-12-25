@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -44,7 +44,7 @@
 #include "wniApi.h"
 #include "sirApi.h"
 #include "aniGlobal.h"
-#include "wniCfgSta.h"
+#include "wni_cfg.h"
 #include "limTypes.h"
 #include "limUtils.h"
 #include "limSendSmeRspMessages.h"
@@ -221,7 +221,7 @@ rrmSetMaxTxPowerRsp ( tpAniSirGlobal pMac, tpSirMsgQ limMsgQ )
    {
       for (i =0;i < pMac->lim.maxBssId;i++)
       {
-         if ( (pMac->lim.gpSession[i].valid == TRUE ))
+         if (pMac->lim.gpSession[i].valid == TRUE )
          {
             pSessionEntry = &pMac->lim.gpSession[i];
             rrmCacheMgmtTxPower ( pMac, pMaxTxParams->power, pSessionEntry );
@@ -282,7 +282,7 @@ rrmProcessLinkMeasurementRequest( tpAniSirGlobal pMac,
    }
    pHdr = WDA_GET_RX_MAC_HEADER( pRxPacketInfo );
 
-   LinkReport.txPower = limGetMaxTxPower (pLinkReq->MaxTxPower.maxTxPower,
+   LinkReport.txPower = limGetMaxTxPower (pSessionEntry->maxTxPower,
                                           pLinkReq->MaxTxPower.maxTxPower,
                                           pMac->roam.configParam.nTxPowerCap);
 
@@ -386,7 +386,6 @@ rrmProcessNeighborReportResponse( tpAniSirGlobal pMac,
    vos_mem_set(pSmeNeighborRpt, length, 0);
 
    /* Allocated memory for pSmeNeighborRpt...will be freed by other module */
-
    for( i = 0 ; i < pNeighborRep->num_NeighborReport ; i++ )
    {
       pSmeNeighborRpt->sNeighborBssDescription[i].length = sizeof( tSirNeighborBssDescription ); /*+ any optional ies */
@@ -418,7 +417,8 @@ rrmProcessNeighborReportResponse( tpAniSirGlobal pMac,
    //Send request to SME.
    mmhMsg.type    = pSmeNeighborRpt->messageType;
    mmhMsg.bodyptr = pSmeNeighborRpt;
-   MTRACE(macTraceMsgTx(pMac, pSessionEntry->peSessionId, mmhMsg.type));
+   MTRACE(macTrace(pMac, TRACE_CODE_TX_SME_MSG, pSessionEntry->peSessionId,
+                                                           mmhMsg.type));
    status = limSysProcessMmhMsgApi(pMac, &mmhMsg, ePROT);
 
    return status;
@@ -627,22 +627,37 @@ rrmProcessBeaconReportReq( tpAniSirGlobal pMac,
    pSmeBcnReportReq->channelList.numChannels = num_channels;
    if( pBeaconReq->measurement_request.Beacon.num_APChannelReport )
    {
-      tANI_U8 *pChanList = pSmeBcnReportReq->channelList.channelNumber;
-      for( num_APChanReport = 0 ; num_APChanReport < pBeaconReq->measurement_request.Beacon.num_APChannelReport ; num_APChanReport++ )
-      {
-         vos_mem_copy(pChanList,
-          pBeaconReq->measurement_request.Beacon.APChannelReport[num_APChanReport].channelList,
-          pBeaconReq->measurement_request.Beacon.APChannelReport[num_APChanReport].num_channelList);
+      tANI_U8 *ch_lst = pSmeBcnReportReq->channelList.channelNumber;
+      tANI_U8 len;
+      tANI_U16 ch_ctr = 0;
+      for(num_APChanReport = 0;
+          num_APChanReport <
+          pBeaconReq->measurement_request.Beacon.num_APChannelReport;
+          num_APChanReport++) {
+              len = pBeaconReq->measurement_request.Beacon.
+                  APChannelReport[num_APChanReport].num_channelList;
+              if (ch_ctr + len >
+                 sizeof(pSmeBcnReportReq->channelList.channelNumber))
+                      break;
 
-         pChanList += pBeaconReq->measurement_request.Beacon.APChannelReport[num_APChanReport].num_channelList;
+              vos_mem_copy(&ch_lst[ch_ctr],
+                           pBeaconReq->measurement_request.Beacon.
+                           APChannelReport[num_APChanReport].channelList,
+                           len);
+
+              ch_ctr += len;
       }
    }
 
    //Send request to SME.
    mmhMsg.type    = eWNI_SME_BEACON_REPORT_REQ_IND;
    mmhMsg.bodyptr = pSmeBcnReportReq;
-   MTRACE(macTraceMsgTx(pMac, pSessionEntry->peSessionId, mmhMsg.type));
-   return limSysProcessMmhMsgApi(pMac, &mmhMsg, ePROT);
+   MTRACE(macTrace(pMac, TRACE_CODE_TX_SME_MSG, pSessionEntry->peSessionId,
+                                                          mmhMsg.type));
+   if (eSIR_SUCCESS != limSysProcessMmhMsgApi(pMac, &mmhMsg, ePROT))
+      return eRRM_FAILURE;
+
+   return eRRM_SUCCESS;
 }
 
 // --------------------------------------------------------------------
@@ -697,12 +712,18 @@ rrmFillBeaconIes( tpAniSirGlobal pMac,
    *((tANI_U16*)pIes) = pBssDesc->capabilityInfo;
    *pNumIes+=sizeof(tANI_U16); pIes+=sizeof(tANI_U16);
 
-   while ( BcnNumIes > 0 )
+   while ( BcnNumIes >= 2 )
    {
-      len = *(pBcnIes + 1) + 2; //element id + length.
+      len = *(pBcnIes + 1);
+      len += 2;            //element id + length.
       limLog( pMac, LOG3, "EID = %d, len = %d total = %d",
              *pBcnIes, *(pBcnIes+1), len );
 
+      if (BcnNumIes < len || len <= 2) {
+          limLog(pMac, LOGE, "RRM: Invalid IE len: %d, exp_len: %d",
+                 len, BcnNumIes);
+          break;
+      }
       i = 0;
       do
       {
@@ -1230,8 +1251,8 @@ rrmInitialize(tpAniSirGlobal pMac)
    pRRMCaps->fine_time_meas_rpt = 1;
    pRRMCaps->lci_capability = 1;
 
-   pRRMCaps->operatingChanMax = 3;
-   pRRMCaps->nonOperatingChanMax = 3;
+   pRRMCaps->operatingChanMax = 4;
+   pRRMCaps->nonOperatingChanMax = 4;
 
    return eSIR_SUCCESS;
 }
