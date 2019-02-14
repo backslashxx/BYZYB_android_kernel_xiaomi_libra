@@ -73,8 +73,75 @@
 #include "vos_types.h"
 #include "vos_packet.h"
 #include "vos_memory.h"
+#include "limSecurityUtils.h"
+#include "ieee80211_common.h"
 
 void limLogSessionStates(tpAniSirGlobal pMac);
+
+#ifdef WLAN_FEATURE_SAE
+/**
+ * lim_process_sae_msg() - Process SAE message
+ * @mac: Global MAC pointer
+ * @body: Buffer pointer
+ *
+ * Return: None
+ */
+static void lim_process_sae_msg(tpAniSirGlobal mac, struct sir_sae_msg *body)
+{
+	struct sir_sae_msg *sae_msg = body;
+	tpPESession session;
+
+	if (!sae_msg) {
+		limLog(mac, LOGE, FL("SAE msg is NULL"));
+		return;
+	}
+
+	session = pe_find_session_by_sme_session_id(mac,
+			sae_msg->session_id);
+	if (session == NULL) {
+		limLog(mac, LOGE, FL("SAE:Unable to find session"));
+		return;
+	}
+
+	if (session->pePersona != VOS_STA_MODE) {
+		limLog(mac, LOGE, FL("SAE:Not supported in this mode %d"),
+			session->pePersona);
+		return;
+	}
+
+	limLog(mac, LOG1, FL("SAE:status %d limMlmState %d pePersona %d"),
+		sae_msg->sae_status, session->limMlmState,
+		session->pePersona);
+	switch (session->limMlmState) {
+	case eLIM_MLM_WT_SAE_AUTH_STATE:
+	/* SAE authentication is completed. Restore from auth state */
+		if (tx_timer_running(&mac->lim.limTimers.sae_auth_timer))
+			limDeactivateAndChangeTimer(mac,
+				eLIM_AUTH_SAE_TIMER);
+		/* success */
+		if (sae_msg->sae_status == IEEE80211_STATUS_SUCCESS)
+			limRestoreFromAuthState(mac,
+				eSIR_SME_SUCCESS,
+				eSIR_MAC_SUCCESS_STATUS,
+				session);
+		else
+			limRestoreFromAuthState(mac,
+				eSIR_SME_AUTH_REFUSED,
+				eSIR_MAC_UNSPEC_FAILURE_STATUS,
+				session);
+	break;
+	default:
+	/* SAE msg is received in unexpected state */
+		limLog(mac, LOGE, FL("received SAE msg in state %X"),
+			session->limMlmState);
+		limPrintMlmState(mac, LOGE, session->limMlmState);
+	break;
+	}
+}
+#else
+static void lim_process_sae_msg(tpAniSirGlobal mac, struct sir_sae_msg *body)
+{}
+#endif
 
 /** -------------------------------------------------------------
 \fn defMsgDecision
@@ -2177,6 +2244,12 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
 
     case eWNI_SME_DEL_ALL_TDLS_PEERS:
         lim_process_sme_del_all_tdls_peers(pMac, limMsg->bodyptr);
+        vos_mem_free((v_VOID_t*)limMsg->bodyptr);
+        limMsg->bodyptr = NULL;
+        break;
+
+    case eWNI_SME_SEND_SAE_MSG:
+        lim_process_sae_msg(pMac, limMsg->bodyptr);
         vos_mem_free((v_VOID_t*)limMsg->bodyptr);
         limMsg->bodyptr = NULL;
         break;
