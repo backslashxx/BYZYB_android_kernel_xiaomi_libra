@@ -757,6 +757,9 @@ limCleanupMlm(tpAniSirGlobal pMac)
         tx_timer_deactivate(&pMac->lim.limTimers.gLimActiveToPassiveChannelTimer);
         tx_timer_delete(&pMac->lim.limTimers.gLimActiveToPassiveChannelTimer);
 
+        tx_timer_deactivate(&pMac->lim.limTimers.sae_auth_timer);
+        tx_timer_delete(&pMac->lim.limTimers.sae_auth_timer);
+
         pMac->lim.gLimTimersCreated = 0;
     }
 

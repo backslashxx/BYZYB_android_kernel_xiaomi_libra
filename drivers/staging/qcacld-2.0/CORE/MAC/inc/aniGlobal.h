@@ -400,6 +400,9 @@ typedef struct sLimTimers
      */
     TX_TIMER           gLimActiveToPassiveChannelTimer;
 
+    /* SAE authentication related timer */
+    TX_TIMER           sae_auth_timer;
+
 //********************TIMER SECTION ENDS**************************************************
 // ALL THE FIELDS BELOW THIS CAN BE ZEROED OUT in limInitialize
 //****************************************************************************************
