@@ -153,6 +153,7 @@ enum {
 #ifdef FEATURE_WLAN_LPHB
     TRACE_CODE_SME_RX_HDD_LPHB_CONFIG_REQ,
 #endif /* FEATURE_WLAN_LPHB */
+    TRACE_CODE_SME_RX_HDD_SEND_MGMT_TX,
 };
 
 void smeTraceInit(tpAniSirGlobal pMac);
