@@ -498,6 +498,7 @@ typedef struct sPESession           // Added to Support BT-AMP
     /* Supported NSS is intersection of self and peer NSS */
     bool supported_nss_1x1;
     bool add_bss_failed;
+    bool sae_pmk_cached;
 } tPESession, *tpPESession;
 
 /*-------------------------------------------------------------------------
