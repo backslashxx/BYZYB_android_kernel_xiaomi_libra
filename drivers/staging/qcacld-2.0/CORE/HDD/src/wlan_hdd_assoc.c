@@ -1875,54 +1875,56 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
                 netif_carrier_off(dev);
                 return eHAL_STATUS_FAILURE;
             }
+            //Association Response
+            pFTAssocRsp = (u8 *)(pRoamInfo->pbFrames + pRoamInfo->nBeaconLength +
+                                    pRoamInfo->nAssocReqLength);
+            if (pFTAssocRsp != NULL)
+            {
+                // pFTAssocRsp needs to point to the IEs
+                pFTAssocRsp += FT_ASSOC_RSP_IES_OFFSET;
+                hddLog(LOG1, "%s: AssocRsp is now at %02x%02x", __func__,
+                                    (unsigned int)pFTAssocRsp[0],
+                                    (unsigned int)pFTAssocRsp[1]);
+                assocRsplen = pRoamInfo->nAssocRspLength - FT_ASSOC_RSP_IES_OFFSET;
+            }
+            else
+            {
+                hddLog(LOGE, "%s:AssocRsp is NULL", __func__);
+                assocRsplen = 0;
+            }
+
+            //Association Request
+            pFTAssocReq = (u8 *)(pRoamInfo->pbFrames +
+                                 pRoamInfo->nBeaconLength);
+            if (pFTAssocReq != NULL)
+            {
+                if(!ft_carrier_on)
+                {
+                     // pFTAssocReq needs to point to the IEs
+                    pFTAssocReq += FT_ASSOC_REQ_IES_OFFSET;
+                    hddLog(LOG1, "%s: pFTAssocReq is now at %02x%02x", __func__,
+                                          (unsigned int)pFTAssocReq[0],
+                                          (unsigned int)pFTAssocReq[1]);
+                    assocReqlen = pRoamInfo->nAssocReqLength - FT_ASSOC_REQ_IES_OFFSET;
+                }
+                else
+                {
+                    /* This should contain only the FTIEs */
+                    assocReqlen = pRoamInfo->nAssocReqLength;
+                }
+                hddLog(LOG1, "assocReqlen %d assocRsplen %d", assocReqlen,
+                                         assocRsplen);
+            }
+            else
+            {
+                hddLog(LOGE, "%s:AssocReq is NULL", __func__);
+                assocReqlen = 0;
+            }
+
 #ifdef WLAN_FEATURE_VOWIFI_11R
             if(pRoamInfo->u.pConnectedProfile->AuthType == eCSR_AUTH_TYPE_FT_RSN ||
                 pRoamInfo->u.pConnectedProfile->AuthType == eCSR_AUTH_TYPE_FT_RSN_PSK )
             {
-
-                //Association Response
-                pFTAssocRsp = (u8 *)(pRoamInfo->pbFrames + pRoamInfo->nBeaconLength +
-                                    pRoamInfo->nAssocReqLength);
-                if (pFTAssocRsp != NULL)
-                {
-                    // pFTAssocRsp needs to point to the IEs
-                    pFTAssocRsp += FT_ASSOC_RSP_IES_OFFSET;
-                    hddLog(LOG1, "%s: AssocRsp is now at %02x%02x", __func__,
-                                        (unsigned int)pFTAssocRsp[0],
-                                        (unsigned int)pFTAssocRsp[1]);
-                    assocRsplen = pRoamInfo->nAssocRspLength - FT_ASSOC_RSP_IES_OFFSET;
-                }
-                else
-                {
-                    hddLog(LOGE, "%s:AssocRsp is NULL", __func__);
-                    assocRsplen = 0;
-                }
-
-                //Association Request
-                pFTAssocReq = (u8 *)(pRoamInfo->pbFrames +
-                                     pRoamInfo->nBeaconLength);
-                if (pFTAssocReq != NULL)
-                {
-                    if(!ft_carrier_on)
-                    {
-                         // pFTAssocReq needs to point to the IEs
-                        pFTAssocReq += FT_ASSOC_REQ_IES_OFFSET;
-                        hddLog(LOG1, "%s: pFTAssocReq is now at %02x%02x", __func__,
-                                              (unsigned int)pFTAssocReq[0],
-                                              (unsigned int)pFTAssocReq[1]);
-                        assocReqlen = pRoamInfo->nAssocReqLength - FT_ASSOC_REQ_IES_OFFSET;
-                    }
-                    else
-                    {
-                        /* This should contain only the FTIEs */
-                        assocReqlen = pRoamInfo->nAssocReqLength;
-                    }
-                }
-                else
-                {
-                    hddLog(LOGE, "%s:AssocReq is NULL", __func__);
-                    assocReqlen = 0;
-                }
 
                 if(ft_carrier_on)
                 {
@@ -1940,8 +1942,6 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
                                      "indication", __FUNCTION__, ft_carrier_on);
                         chan = ieee80211_get_channel(pAdapter->wdev.wiphy,
                                              (int)pRoamInfo->pBssDesc->channelId);
-                        hddLog(LOG1, "assocReqlen %d assocRsplen %d", assocReqlen,
-                                             assocRsplen);
                         cfg80211_roamed(dev,chan, pRoamInfo->bssid,
                                          pFTAssocReq, assocReqlen, pFTAssocRsp, assocRsplen,
                                         GFP_KERNEL);
@@ -2005,8 +2005,8 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
 
                         /* inform connect result to nl80211 */
                         hdd_connect_result(dev, pRoamInfo->bssid, pRoamInfo,
-                                reqRsnIe, reqRsnLength,
-                                rspRsnIe, rspRsnLength,
+                                pFTAssocReq, assocReqlen,
+                                pFTAssocRsp, assocRsplen,
                                 WLAN_STATUS_SUCCESS,
                                 GFP_KERNEL);
                     }
