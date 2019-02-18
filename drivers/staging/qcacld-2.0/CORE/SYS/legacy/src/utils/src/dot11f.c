@@ -5312,6 +5312,29 @@ tANI_U32 dot11fUnpackIeWscReassocRes(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8
 #define SigIeWscReassocRes ( 0x0082 )
 
 
+tANI_U32 dot11fUnpackIedh_parameter_element(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tDot11fIEdh_parameter_element *pDst)
+{
+    tANI_U32 status = DOT11F_PARSE_SUCCESS;
+    (void) pBuf; (void)ielen; /* Shutup the compiler */
+    if (pDst->present) status = DOT11F_DUPLICATE_IE;
+    pDst->present = 1;
+    if (unlikely(ielen < 2)) {
+        pDst->present = 0;
+        return DOT11F_INCOMPLETE_IE;
+    }
+
+    DOT11F_MEMCPY(pCtx, pDst->group, pBuf, 2);
+    pBuf += 2;
+    ielen -= (tANI_U8)2;
+    pDst->num_public_key = (tANI_U8)( ielen );
+    DOT11F_MEMCPY(pCtx, pDst->public_key, pBuf, ( ielen ) );
+    (void)pCtx;
+    return status;
+} /* End dot11fUnpackIedh_parameter_element. */
+
+#define SigIedh_parameter_element ( 0x0086 )
+
+
 tANI_U32 dot11fUnpackIeext_chan_switch_ann(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tDot11fIEext_chan_switch_ann *pDst)
 {
     tANI_U32 status = DOT11F_PARSE_SUCCESS;
@@ -5991,6 +6014,7 @@ tANI_U32 dot11fUnpackAddTSResponse(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 
         {offsetof(tDot11fAssocRequest, QOSCapsStation), offsetof(tDot11fIEQOSCapsStation, present), 0, "QOSCapsStation" , 0, 3, 3, SigIeQOSCapsStation, {0, 0, 0, 0, 0}, 0, DOT11F_EID_QOSCAPSSTATION, 0, },
         {offsetof(tDot11fAssocRequest, RRMEnabledCap), offsetof(tDot11fIERRMEnabledCap, present), 0, "RRMEnabledCap" , 0, 7, 7, SigIeRRMEnabledCap, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RRMENABLEDCAP, 0, },
         {offsetof(tDot11fAssocRequest, MobilityDomain), offsetof(tDot11fIEMobilityDomain, present), 0, "MobilityDomain" , 0, 5, 5, SigIeMobilityDomain, {0, 0, 0, 0, 0}, 0, DOT11F_EID_MOBILITYDOMAIN, 0, },
+        {offsetof(tDot11fAssocRequest, dh_parameter_element), offsetof(tDot11fIEdh_parameter_element, present), 0, "dh_parameter_element" , 0, 4, 259, SigIedh_parameter_element, {0, 0, 0, 0, 0}, 0, DOT11F_EID_DH_PARAMETER_ELEMENT, 32, 0, },
         {offsetof(tDot11fAssocRequest, WPAOpaque), offsetof(tDot11fIEWPAOpaque, present), 0, "WPAOpaque" , 0, 8, 255, SigIeWPAOpaque, {0, 80, 242, 1, 0}, 4, DOT11F_EID_WPAOPAQUE, 0, },
         {offsetof(tDot11fAssocRequest, HTCaps), offsetof(tDot11fIEHTCaps, present), 0, "HTCaps" , 0, 28, 60, SigIeHTCaps, {0, 0, 0, 0, 0}, 0, DOT11F_EID_HTCAPS, 0, },
         {offsetof(tDot11fAssocRequest, WMMCaps), offsetof(tDot11fIEWMMCaps, present), 0, "WMMCaps" , 0, 9, 9, SigIeWMMCaps, {0, 80, 242, 2, 5}, 5, DOT11F_EID_WMMCAPS, 0, },
@@ -6165,6 +6189,17 @@ tANI_U32 dot11fUnpackAssocRequest(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 n
             FRAMES_LOG1(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("overDSCap (1): %d\n"), pFrm->MobilityDomain.overDSCap);
             FRAMES_LOG1(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("resourceReqCap (1): %d\n"), pFrm->MobilityDomain.resourceReqCap);
             FRAMES_LOG1(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("reserved (6): %d\n"), pFrm->MobilityDomain.reserved);
+        }
+        FRAMES_LOG0(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("dh_parameter_element:\n"));
+        if (!pFrm->dh_parameter_element.present)
+        {
+            FRAMES_LOG0(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("Not present.\n"));
+        }
+        else
+        {
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), ( tANI_U8* )&pFrm->dh_parameter_element.group, 2);
+            FRAMES_LOG1(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("num_public_key: %d.\n"), pFrm->dh_parameter_element.num_public_key);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), ( tANI_U8* ) pFrm->dh_parameter_element.public_key, pFrm->dh_parameter_element.num_public_key);
         }
         FRAMES_LOG0(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("WPAOpaque:\n"));
         if (!pFrm->WPAOpaque.present)
@@ -19188,6 +19223,9 @@ static tANI_U32 UnpackCore(tpAniSirGlobal pCtx,
                 case SigIeWscReassocRes:
                         status |= dot11fUnpackIeWscReassocRes(pCtx, pBufRemaining, len, ( tDot11fIEWscReassocRes* )(pFrm + pIe->offset + sizeof(tDot11fIEWscReassocRes)*countOffset) );
                             break;
+                case SigIedh_parameter_element:
+                        status |= dot11fUnpackIedh_parameter_element(pCtx, pBufRemaining, len, ( tDot11fIEdh_parameter_element* )(pFrm + pIe->offset + sizeof(tDot11fIEdh_parameter_element)*countOffset) );
+                            break;
                 case SigIeext_chan_switch_ann:
                         status |= dot11fUnpackIeext_chan_switch_ann(pCtx, pBufRemaining, len, ( tDot11fIEext_chan_switch_ann* )(pFrm + pIe->offset + sizeof(tDot11fIEext_chan_switch_ann)*countOffset) );
                             break;
@@ -21465,6 +21503,11 @@ static tANI_U32 GetPackedSizeCore(tpAniSirGlobal pCtx,
                 case SigIeWscReassocRes:
                             offset = sizeof(tDot11fIEWscReassocRes);
                             status |= dot11fGetPackedIEWscReassocRes(pCtx, ( tDot11fIEWscReassocRes* )(pFrm + pIe->offset + offset * i ), pnNeeded);
+                            break;
+                case SigIedh_parameter_element:
+                            offset = sizeof(tDot11fIEdh_parameter_element);
+                            byteCount = ((tDot11fIEdh_parameter_element* )(pFrm + pIe->offset + sizeof(tDot11fIEdh_parameter_element) * i ))->num_public_key + 2;
+                            pIePresent = ( (tDot11fIEdh_parameter_element* )(pFrm + pIe->offset + offset * i  ))->present;
                             break;
                 case SigIeext_chan_switch_ann:
                             offset = sizeof(tDot11fIEext_chan_switch_ann);
@@ -29380,6 +29423,41 @@ tANI_U32 dot11fPackIeWscReassocRes(tpAniSirGlobal pCtx,
     return status;
 } /* End dot11fPackIeWscReassocRes. */
 
+tANI_U32 dot11fPackIedh_parameter_element(tpAniSirGlobal pCtx,
+                                          tDot11fIEdh_parameter_element *pSrc,
+                                          tANI_U8 *pBuf,
+                                          tANI_U32 nBuf,
+                                          tANI_U32 *pnConsumed)
+{
+    tANI_U8* pIeLen = 0;
+    tANI_U32 nConsumedOnEntry = *pnConsumed;
+    tANI_U32 nNeeded = 0U;
+    nNeeded  +=  (pSrc->num_public_key + 2);
+    while ( pSrc->present )
+    {
+        if ( nNeeded > nBuf ) return DOT11F_BUFFER_OVERFLOW;
+        *pBuf = 255;
+        ++pBuf; ++(*pnConsumed);
+        pIeLen = pBuf;
+        ++pBuf; ++(*pnConsumed);
+        *pBuf = 32;
+        ++pBuf; ++(*pnConsumed);
+        DOT11F_MEMCPY(pCtx, pBuf, pSrc->group, 2);
+        *pnConsumed += 2;
+        pBuf += 2;
+        DOT11F_MEMCPY(pCtx, pBuf, &( pSrc->public_key ), pSrc->num_public_key);
+        *pnConsumed += pSrc->num_public_key;
+        // fieldsEndFlag = 1
+        break;
+    }
+    (void)pCtx;
+    if (pIeLen)
+    {
+        *pIeLen = *pnConsumed - nConsumedOnEntry - 2;
+    }
+    return DOT11F_PARSE_SUCCESS;
+} /* End dot11fPackIedh_parameter_element. */
+
 tANI_U32 dot11fPackIeext_chan_switch_ann(tpAniSirGlobal pCtx,
                                          tDot11fIEext_chan_switch_ann *pSrc,
                                          tANI_U8 *pBuf,
@@ -30170,6 +30248,17 @@ tANI_U32 dot11fPackAssocRequest(tpAniSirGlobal pCtx, tDot11fAssocRequest *pFrm, 
             FRAMES_LOG1(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("overDSCap (1): %d\n"), pFrm->MobilityDomain.overDSCap);
             FRAMES_LOG1(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("resourceReqCap (1): %d\n"), pFrm->MobilityDomain.resourceReqCap);
             FRAMES_LOG1(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("reserved (6): %d\n"), pFrm->MobilityDomain.reserved);
+        }
+        FRAMES_LOG0(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("dh_parameter_element:\n"));
+        if (!pFrm->dh_parameter_element.present)
+        {
+            FRAMES_LOG0(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("Not present.\n"));
+        }
+        else
+        {
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), ( tANI_U8* )&pFrm->dh_parameter_element.group, 2);
+            FRAMES_LOG1(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("num_public_key: %d.\n"), pFrm->dh_parameter_element.num_public_key);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), ( tANI_U8* ) pFrm->dh_parameter_element.public_key, pFrm->dh_parameter_element.num_public_key);
         }
         FRAMES_LOG0(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_ASSOCREQUEST), FRFL("WPAOpaque:\n"));
         if (!pFrm->WPAOpaque.present)
@@ -42161,6 +42250,9 @@ static tANI_U32 PackCore(tpAniSirGlobal pCtx,
                         break;
                     case SigIeWscReassocRes:
                         status |= dot11fPackIeWscReassocRes(pCtx, ( tDot11fIEWscReassocRes* )(pSrc + pIe->offset + sizeof(tDot11fIEWscReassocRes) * i ),  pBufRemaining, nBufRemaining, &len);
+                        break;
+                    case SigIedh_parameter_element:
+                        status |= dot11fPackIedh_parameter_element(pCtx, ( tDot11fIEdh_parameter_element* )(pSrc + pIe->offset + sizeof(tDot11fIEdh_parameter_element) * i ),  pBufRemaining, nBufRemaining, &len);
                         break;
                     case SigIeext_chan_switch_ann:
                         status |= dot11fPackIeext_chan_switch_ann(pCtx, ( tDot11fIEext_chan_switch_ann* )(pSrc + pIe->offset + sizeof(tDot11fIEext_chan_switch_ann) * i ),  pBufRemaining, nBufRemaining, &len);
