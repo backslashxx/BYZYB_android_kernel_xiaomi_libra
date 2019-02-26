@@ -4187,6 +4187,16 @@ REG_TABLE_ENTRY g_registry_table[] =
                 CFG_SAP_TX_LEAKAGE_THRESHOLD_DEFAULT,
                 CFG_SAP_TX_LEAKAGE_THRESHOLD_MIN,
                 CFG_SAP_TX_LEAKAGE_THRESHOLD_MAX),
+
+#ifdef WLAN_FEATURE_SAE
+	REG_VARIABLE(CFG_IS_SAE_ENABLED_NAME, WLAN_PARAM_Integer,
+		hdd_config_t, is_sae_enabled,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_IS_SAE_ENABLED_DEFAULT,
+		CFG_IS_SAE_ENABLED_MIN,
+		CFG_IS_SAE_ENABLED_MAX),
+#endif
+
 };
 
 #ifdef WLAN_FEATURE_MBSSID
@@ -4407,6 +4417,18 @@ config_exit:
    return vos_status;
 }
 
+#ifdef WLAN_FEATURE_SAE
+static void hdd_cfg_print_sae(hdd_context_t *hdd_ctx)
+{
+	hddLog(LOG2, "Name = [%s] value = [%u]",
+	       CFG_IS_SAE_ENABLED_NAME,
+	       hdd_ctx->cfg_ini->is_sae_enabled);
+}
+#else
+static void hdd_cfg_print_sae(hdd_context_t *hdd_ctx)
+{
+}
+#endif
 
 void print_hdd_cfg(hdd_context_t *pHddCtx)
 {
@@ -4877,6 +4899,7 @@ void print_hdd_cfg(hdd_context_t *pHddCtx)
   hddLog(LOG2, "Name = [gIdleTimeConc] Value = [%u]",
                    pHddCtx->cfg_ini->idle_time_conc);
 
+  hdd_cfg_print_sae(pHddCtx);
 }
 
 #define CFG_VALUE_MAX_LEN 256
@@ -5438,7 +5461,6 @@ eCsrPhyMode hdd_cfg_xlate_to_csr_phy_mode( eHddDot11Mode dot11Mode )
       case (eHDD_DOT11_MODE_11a):
          return eCSR_DOT11_MODE_11a;
    }
-
 }
 
 static void hdd_set_btc_config(hdd_context_t *pHddCtx)
@@ -5793,7 +5815,6 @@ v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
 
    hdd_config_t *pConfig = pHddCtx->cfg_ini;
    tSirMacHTCapabilityInfo *phtCapInfo;
-
 
    if (ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_SHORT_GI_20MHZ,
       pConfig->ShortGI20MhzEnable, NULL, eANI_BOOLEAN_FALSE)==eHAL_STATUS_FAILURE)
