@@ -713,9 +713,11 @@ __SC_COMP(__NR_execveat, sys_ni_syscall, sys_ni_syscall)
 __SYSCALL(__NR_userfaultfd, sys_ni_syscall)
 #define __NR_membarrier 283
 __SYSCALL(__NR_membarrier, sys_membarrier)
+#define __NR_faccessat2 439
+__SYSCALL(__NR_faccessat2, sys_faccessat2)
 
 #undef __NR_syscalls
-#define __NR_syscalls 284
+#define __NR_syscalls 440
 
 /*
  * All syscalls below here should go away really,
