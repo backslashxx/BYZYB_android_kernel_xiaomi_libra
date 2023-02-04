@@ -143,6 +143,7 @@ int ip_forward(struct sk_buff *skb)
 
 	skb_forward_csum(skb);
 
+#if 0
 	/*
 	 *	According to the RFC, we must first decrease the TTL field. If
 	 *	that reaches zero, we must reply an ICMP control message telling
@@ -150,6 +151,7 @@ int ip_forward(struct sk_buff *skb)
 	 */
 	if (ip_hdr(skb)->ttl <= 1)
 		goto too_many_hops;
+#endif
 
 	if (!xfrm4_route_forward(skb))
 		goto drop;
@@ -171,8 +173,10 @@ int ip_forward(struct sk_buff *skb)
 		goto drop;
 	iph = ip_hdr(skb);
 
+#if 0
 	/* Decrease ttl after skb cow done */
 	ip_decrease_ttl(iph);
+#endif
 
 	/*
 	 *	We now generate an ICMP HOST REDIRECT giving the route
@@ -194,10 +198,12 @@ sr_failed:
 	 icmp_send(skb, ICMP_DEST_UNREACH, ICMP_SR_FAILED, 0);
 	 goto drop;
 
+#if 0
 too_many_hops:
 	/* Tell the sender its packet died... */
 	IP_INC_STATS_BH(dev_net(skb_dst(skb)->dev), IPSTATS_MIB_INHDRERRORS);
 	icmp_send(skb, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL, 0);
+#endif
 drop:
 	kfree_skb(skb);
 	return NET_RX_DROP;

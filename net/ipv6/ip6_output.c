@@ -405,6 +405,7 @@ int ip6_forward(struct sk_buff *skb)
 			return 0;
 	}
 
+#if 0
 	/*
 	 *	check and decrement ttl
 	 */
@@ -418,6 +419,7 @@ int ip6_forward(struct sk_buff *skb)
 		kfree_skb(skb);
 		return -ETIMEDOUT;
 	}
+#endif
 
 	/* XXX: idev->cnf.proxy_ndp? */
 	if ((net->ipv6.devconf_all->proxy_ndp == 1 &&
@@ -507,7 +509,9 @@ int ip6_forward(struct sk_buff *skb)
 
 	/* Mangling hops number delayed to point after skb COW */
 
+#if 0
 	hdr->hop_limit--;
+#endif
 
 	IP6_INC_STATS_BH(net, ip6_dst_idev(dst), IPSTATS_MIB_OUTFORWDATAGRAMS);
 	IP6_ADD_STATS_BH(net, ip6_dst_idev(dst), IPSTATS_MIB_OUTOCTETS, skb->len);
