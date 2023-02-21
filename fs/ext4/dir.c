@@ -257,8 +257,10 @@ static int ext4_readdir(struct file *file, struct dir_context *ctx)
 					err = ext4_fname_disk_to_usr(inode,
 						NULL, de, &fname_crypto_str);
 					fname_crypto_str.len = save_len;
-					if (err < 0)
+					if (err < 0) {
+						brelse(bh);
 						goto errout;
+					}
 					if (!dir_emit(ctx,
 					    fname_crypto_str.name, err,
 					    le32_to_cpu(de->inode),
