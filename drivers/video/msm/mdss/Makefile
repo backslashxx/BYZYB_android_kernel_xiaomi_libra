@@ -52,5 +52,3 @@ obj-$(CONFIG_FB_MSM_MDSS) += mdss_fb.o mdss_util.o
 obj-$(CONFIG_COMPAT) += mdss_compat_utils.o
 
 obj-$(CONFIG_FB_MSM_MDSS) += mdss_livedisplay.o
-
-CFLAGS_mdss_mdp_overlay.o += -Wframe-larger-than=8192
