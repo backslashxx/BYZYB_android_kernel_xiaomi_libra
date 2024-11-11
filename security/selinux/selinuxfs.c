@@ -75,6 +75,9 @@ static char policy_opened;
 /* global data for policy capabilities */
 static struct dentry *policycap_dir;
 
+/* Fake enforcing */
+static int sel_fake_enforce = 0;
+
 /* Check whether a task is allowed to use a security operation. */
 static int task_has_security(struct task_struct *tsk,
 			     u32 perms)
@@ -132,7 +135,7 @@ static ssize_t sel_read_enforce(struct file *filp, char __user *buf,
 	char tmpbuf[TMPBUFLEN];
 	ssize_t length;
 
-	length = scnprintf(tmpbuf, TMPBUFLEN, "%d", selinux_enforcing);
+	length = scnprintf(tmpbuf, TMPBUFLEN, "%d", sel_fake_enforce);
 	return simple_read_from_buffer(buf, count, ppos, tmpbuf, length);
 }
 
@@ -167,18 +170,28 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	if (sscanf(page, "%d", &new_value) != 1)
 		goto out;
 
-	if (new_value != selinux_enforcing) {
+	if (new_value != sel_fake_enforce) {
 		length = task_has_security(current, SECURITY__SETENFORCE);
 		if (length)
 			goto out;
+		
 		audit_log(current->audit_context, GFP_KERNEL, AUDIT_MAC_STATUS,
 			"enforcing=%d old_enforcing=%d auid=%u ses=%u",
 			new_value, selinux_enforcing,
 			from_kuid(&init_user_ns, audit_get_loginuid(current)),
 			audit_get_sessionid(current));
-		selinux_enforcing = new_value;
+		
+		if (new_value == 2) {
+			sel_fake_enforce = 1;
+			selinux_enforcing = 0;
+		} else {
+			sel_fake_enforce = new_value;
+			selinux_enforcing = new_value;
+		}
+		
 		if (selinux_enforcing)
 			avc_ss_reset(0);
+		
 		selnl_notify_setenforce(selinux_enforcing);
 		selinux_status_update_setenforce(selinux_enforcing);
 	}
