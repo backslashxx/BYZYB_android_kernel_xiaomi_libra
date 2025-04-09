@@ -45,6 +45,12 @@ scm_version()
 	# Check for git and a git repo.
 	if test -d .git && head=`git rev-parse --verify --short HEAD 2>/dev/null`; then
 
+		if [ "$CONFIG_LOCALVERSION_AUTO" = "y" ] && [ -n "$CONFIG_LOCALVERSION" ]; then
+ 			lasthash="$(git rev-parse --short HEAD | cut -c1-7)"
+ 			printf '%s' "/$lasthash"
+ 			return
+ 		fi
+
 		# If we are at a tagged commit (like "v2.6.30-rc6"), we ignore
 		# it, because this version is defined in the top level Makefile.
 		if atag="`git describe --exact-match --abbrev=0 2>/dev/null`"; then
