@@ -131,6 +131,9 @@ print_task(struct seq_file *m, struct rq *rq, struct task_struct *p)
 	SEQ_printf(m, "%15Ld %15Ld %15Ld.%06ld %15Ld.%06ld %15Ld.%06ld",
 		0LL, 0LL, 0LL, 0L, 0LL, 0L, 0LL, 0L);
 #endif
+#ifdef CONFIG_SCHED_BORE
+	SEQ_printf(m, " %2d", p->se.burst_score);
+#endif // CONFIG_SCHED_BORE
 #ifdef CONFIG_NUMA_BALANCING
 	SEQ_printf(m, " %d", task_node(p));
 #endif
