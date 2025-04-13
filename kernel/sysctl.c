@@ -474,7 +474,7 @@ static struct ctl_table kern_table[] = {
 		.data		= &sched_burst_cache_lifetime,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler = proc_douintvec,
+		.proc_handler = proc_dointvec,
 	},
 #endif // CONFIG_SCHED_BORE
 	{
