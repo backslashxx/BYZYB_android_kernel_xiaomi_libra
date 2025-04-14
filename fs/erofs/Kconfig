@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config EROFS_FS
+	bool "EROFS filesystem support"
+	depends on BLOCK
+	help
+	  EROFS(Enhanced Read-Only File System) is a lightweight
+	  read-only file system with modern designs (eg. page-sized
+	  blocks, inline xattrs/data, etc.) for scenarios which need
+	  high-performance read-only requirements, eg. firmwares in
+	  mobile phone or LIVECDs.
+
+	  If unsure, say N.
+
+config EROFS_FS_XATTR
+	depends on EROFS_FS
+	default y
+
+config EROFS_FS_POSIX_ACL
+	depends on EROFS_FS
+	default y
+
+config EROFS_FS_SECURITY
+	depends on EROFS_FS
+	default y
+
+
