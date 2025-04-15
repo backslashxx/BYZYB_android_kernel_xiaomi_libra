@@ -43,7 +43,7 @@ static int erofs_init_inode_xattrs(struct inode *inode)
 		return 0;
 	}
 
-	if (wait_on_bit_lock(&vi->flags, EROFS_I_BL_XATTR_BIT, TASK_KILLABLE))
+	if (wait_on_bit_lock(&vi->flags, EROFS_I_BL_XATTR_BIT, NULL, TASK_KILLABLE))
 		return -ERESTARTSYS;
 
 	/* someone has initialized xattrs for us? */
