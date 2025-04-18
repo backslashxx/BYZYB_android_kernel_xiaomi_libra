@@ -1,0 +1,2 @@
+# no lto for gcc
+CONFIG_LTO_NONE=y
