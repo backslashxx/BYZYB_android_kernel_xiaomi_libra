@@ -22,12 +22,12 @@ export PATH="$CLANG_DIR/bin:$PATH"
 
 echo $PATH
 
-mkdir out 
+mkdir /tmp/out 
 
-ARCH=arm64 scripts/kconfig/merge_config.sh -O out arch/arm64/configs/libra_defconfig
+ARCH=arm64 scripts/kconfig/merge_config.sh -O /tmp/out arch/arm64/configs/libra_defconfig
 
 
-make -j12 ARCH=arm64 SUBARCH=arm64 O=out \
+make -j12 ARCH=arm64 SUBARCH=arm64 O=/tmp/out \
         CC="ccache clang"\
         AR="llvm-ar" \
 	NM="llvm-nm" \
