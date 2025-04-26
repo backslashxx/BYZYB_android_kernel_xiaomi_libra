@@ -99,7 +99,7 @@ static int dir_rename_wrap(struct inode *old_dir, struct dentry *old_dentry,
 static const struct inode_operations incfs_dir_inode_ops = {
 	.lookup = dir_lookup,
 	.mkdir = dir_mkdir,
-	.rename2 = dir_rename_wrap,
+	.rename = dir_rename_wrap,
 	.unlink = dir_unlink,
 	.link = dir_link,
 	.rmdir = dir_rmdir,
@@ -1871,8 +1871,7 @@ static int dir_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 
 	error = vfs_rename(d_inode(backing_old_dir_dentry), backing_old_dentry,
-			d_inode(backing_new_dir_dentry), backing_new_dentry,
-			0);
+			d_inode(backing_new_dir_dentry), backing_new_dentry);
 	if (error)
 		goto unlock_out;
 	if (target_inode)

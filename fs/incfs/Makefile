@@ -7,3 +7,5 @@ incrementalfs-y := \
 	integrity.o \
 	main.o \
 	vfs.o
+	
+ccflags-y += -Wno-incompatible-function-pointer-types
