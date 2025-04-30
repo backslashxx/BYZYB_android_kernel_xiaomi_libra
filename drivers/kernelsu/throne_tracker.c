@@ -246,7 +246,7 @@ void search_manager(const char *path, int depth, struct list_head *uid_data)
 		struct data_path *pos, *n;
 
 		list_for_each_entry_safe(pos, n, &data_path_list, list) {
-			struct my_dir_context ctx = { .ctx.actor = my_actor,
+			struct my_dir_context ctx = { .ctx.actor = (filldir_t)my_actor,
 						      .data_path_list = &data_path_list,
 						      .parent_dir = pos->dirpath,
 						      .private_data = uid_data,
