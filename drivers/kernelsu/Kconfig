@@ -29,4 +29,12 @@ config KSU_LSM_SECURITY_HOOKS
 	  Disabling this is mostly only useful for kernel 4.1 and older.
 	  Make sure to implement manual hooks on security/security.c.
 
+config KSU_64BIT
+	bool "64 bit"
+        depends on KSU && 64BIT
+        default y
+	help
+	  Disable this if you have a 32-bit userspace.
+	  If unsure, choose y.
+
 endmenu
