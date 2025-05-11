@@ -18,6 +18,8 @@
 #define KERNEL_EXEC_TYPE "ksu_exec"
 #define ALL NULL
 
+extern bool ksu_is_compat;
+
 static struct policydb *get_policydb(void)
 {
 	struct policydb *db;
@@ -149,10 +151,10 @@ void apply_kernelsu_rules()
 #define CMD_TYPE_CHANGE 8
 #define CMD_GENFSCON 9
 
+#if defined(CONFIG_64BIT)
 struct sepol_data {
 	u32 cmd;
 	u32 subcmd;
-#if defined(CONFIG_KSU_64BIT) && defined(CONFIG_64BIT)
 	u64 sepol1;
 	u64 sepol2;
 	u64 sepol3;
@@ -160,7 +162,10 @@ struct sepol_data {
 	u64 sepol5;
 	u64 sepol6;
 	u64 sepol7;
-#else // (KSU_64BIT=n && 64BIT=n, pure 32-bit) && (KSU_64BIT=n && 64BIT=y, 64 bit kernel but 32 bit userspace)
+};
+struct sepol_data_compat {
+	u32 cmd;
+	u32 subcmd;
 	u32 sepol1;
 	u32 sepol2;
 	u32 sepol3;
@@ -168,8 +173,20 @@ struct sepol_data {
 	u32 sepol5;
 	u32 sepol6;
 	u32 sepol7;
-#endif
 };
+#else
+struct sepol_data {
+	u32 cmd;
+	u32 subcmd;
+	u32 sepol1;
+	u32 sepol2;
+	u32 sepol3;
+	u32 sepol4;
+	u32 sepol5;
+	u32 sepol6;
+	u32 sepol7;
+};
+#endif
 
 static int get_object(char *buf, char __user *user_object, size_t buf_sz,
 		      char **object)
@@ -215,32 +232,57 @@ int handle_sepolicy(unsigned long arg3, void __user *arg4)
 		pr_info("SELinux permissive or disabled when handle policy!\n");
 	}
 
+	u32 cmd, subcmd;
+	char __user *ptr1, *ptr2, *ptr3, *ptr4, *ptr5, *ptr6, *ptr7;
+
+#if defined(CONFIG_64BIT)
+	if (unlikely(ksu_is_compat)) {
+		struct sepol_data_compat data_compat;
+		if (copy_from_user(&data_compat, arg4, sizeof(struct sepol_data_compat))) {
+			pr_err("sepol: copy sepol_data failed.\n");
+			return -1;
+		}
+		ptr1 = compat_ptr(data_compat.sepol1);
+		ptr2 = compat_ptr(data_compat.sepol2);
+		ptr3 = compat_ptr(data_compat.sepol3);
+		ptr4 = compat_ptr(data_compat.sepol4);
+		ptr5 = compat_ptr(data_compat.sepol5);
+		ptr6 = compat_ptr(data_compat.sepol6);
+		ptr7 = compat_ptr(data_compat.sepol7);
+		cmd = data_compat.cmd;
+		subcmd = data_compat.subcmd;
+	} else {
+		struct sepol_data data;
+		if (copy_from_user(&data, arg4, sizeof(struct sepol_data))) {
+			pr_err("sepol: copy sepol_data failed.\n");
+			return -1;
+		}
+		ptr1 = data.sepol1;
+		ptr2 = data.sepol2;
+		ptr3 = data.sepol3;
+		ptr4 = data.sepol4;
+		ptr5 = data.sepol5;
+		ptr6 = data.sepol6;
+		ptr7 = data.sepol7;
+		cmd = data.cmd;
+		subcmd = data.subcmd;
+	}
+#else
 	struct sepol_data data;
 	if (copy_from_user(&data, arg4, sizeof(struct sepol_data))) {
 		pr_err("sepol: copy sepol_data failed.\n");
 		return -1;
 	}
-
-#if !defined(CONFIG_KSU_64BIT) && defined(CONFIG_64BIT) // 64 bit kernel but 32 bit userspace
-	char __user *ptr1 = compat_ptr(data.sepol1);
-	char __user *ptr2 = compat_ptr(data.sepol2);
-	char __user *ptr3 = compat_ptr(data.sepol3);
-	char __user *ptr4 = compat_ptr(data.sepol4);
-	char __user *ptr5 = compat_ptr(data.sepol5);
-	char __user *ptr6 = compat_ptr(data.sepol6);
-	char __user *ptr7 = compat_ptr(data.sepol7);
-#else // (KSU_64BIT=y && 64BIT=y, pure 64-bit) && (KSU_64BIT=n && 64BIT=n, pure 32-bit)
-	char __user *ptr1 = data.sepol1;
-	char __user *ptr2 = data.sepol2;
-	char __user *ptr3 = data.sepol3;
-	char __user *ptr4 = data.sepol4;
-	char __user *ptr5 = data.sepol5;
-	char __user *ptr6 = data.sepol6;
-	char __user *ptr7 = data.sepol7;
+	ptr1 = data.sepol1;
+	ptr2 = data.sepol2;
+	ptr3 = data.sepol3;
+	ptr4 = data.sepol4;
+	ptr5 = data.sepol5;
+	ptr6 = data.sepol6;
+	ptr7 = data.sepol7;
+	cmd = data.cmd;
+	subcmd = data.subcmd;
 #endif
-
-	u32 cmd = data.cmd;
-	u32 subcmd = data.subcmd;
 
 	rcu_read_lock();
 

@@ -63,7 +63,7 @@ bool ksu_input_hook __read_mostly = true;
 
 u32 ksu_devpts_sid;
 
-bool ksu_is_compat  __read_mostly = false;
+bool ksu_is_compat __read_mostly = false;
 
 void on_post_fs_data(void)
 {
