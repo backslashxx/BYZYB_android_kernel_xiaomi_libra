@@ -163,7 +163,7 @@ struct sepol_data {
 	u64 sepol6;
 	u64 sepol7;
 };
-struct sepol_data_compat {
+struct __maybe_unused sepol_data_compat {
 	u32 cmd;
 	u32 subcmd;
 	u32 sepol1;
