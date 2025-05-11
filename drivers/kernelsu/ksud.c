@@ -81,8 +81,6 @@ void on_post_fs_data(void)
 	stop_input_hook();
 
 	ksu_devpts_sid = ksu_get_devpts_sid();
-	
-	pr_info("on_post_fs_data: ksu_is_compat %d\n", ksu_is_compat);
 	pr_info("devpts sid: %d\n", ksu_devpts_sid);
 }
 
