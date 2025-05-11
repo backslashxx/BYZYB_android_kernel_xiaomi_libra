@@ -63,6 +63,8 @@ bool ksu_input_hook __read_mostly = true;
 
 u32 ksu_devpts_sid;
 
+bool ksu_is_compat  __read_mostly = false;
+
 void on_post_fs_data(void)
 {
 	static bool done = false;
@@ -77,6 +79,8 @@ void on_post_fs_data(void)
 	stop_input_hook();
 
 	ksu_devpts_sid = ksu_get_devpts_sid();
+	
+	pr_info("on_post_fs_data: ksu_is_compat %d\n", ksu_is_compat);
 	pr_info("devpts sid: %d\n", ksu_devpts_sid);
 }
 
@@ -103,7 +107,7 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
 
 		if (get_user(compat, argv.ptr.compat + nr))
 			return ERR_PTR(-EFAULT);
-
+		ksu_is_compat = true;
 		return compat_ptr(compat);
 	}
 #endif
