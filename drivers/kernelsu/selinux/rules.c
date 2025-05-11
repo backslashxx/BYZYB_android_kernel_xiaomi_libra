@@ -235,7 +235,7 @@ int handle_sepolicy(unsigned long arg3, void __user *arg4)
 	u32 cmd, subcmd;
 	char __user *ptr1, *ptr2, *ptr3, *ptr4, *ptr5, *ptr6, *ptr7;
 
-#if defined(CONFIG_64BIT)
+#if defined(CONFIG_64BIT) && defined(CONFIG_COMPAT)
 	if (unlikely(ksu_is_compat)) {
 		struct sepol_data_compat data_compat;
 		if (copy_from_user(&data_compat, arg4, sizeof(struct sepol_data_compat))) {
