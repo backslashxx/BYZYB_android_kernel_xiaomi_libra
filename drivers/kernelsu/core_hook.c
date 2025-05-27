@@ -601,11 +601,9 @@ LSM_HANDLER_TYPE ksu_handle_setuid(struct cred *new, const struct cred *old)
 			current->pid);
 		return 0;
 	}
-#ifdef CONFIG_KSU_DEBUG
+
 	// umount the target mnt
-	pr_info("handle umount for uid: %d, pid: %d\n", new_uid,
-		current->pid);
-#endif
+	pr_info("handle umount for uid: %d, pid: %d\n", new_uid, current->pid);
 
 	list_for_each_entry_safe(entry, tmp, &mount_list, list) {
 		try_umount(entry->umountable, MNT_DETACH);
