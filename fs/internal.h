@@ -41,10 +41,6 @@ static inline int __sync_blockdev(struct block_device *bdev, int wait)
  */
 extern void __init chrdev_init(void);
 
-/*
- * namei.c
- */
-extern int __inode_permission(struct inode *, int);
 
 /*
  * namespace.c
@@ -133,11 +129,6 @@ extern long prune_dcache_sb(struct super_block *sb, unsigned long nr_to_scan);
  */
 extern ssize_t __kernel_write(struct file *, const char *, size_t, loff_t *);
 
-/*
- * splice.c
- */
-extern long do_splice_direct(struct file *in, loff_t *ppos, struct file *out,
-		loff_t *opos, size_t len, unsigned int flags);
 
 /*
  * pipe.c
