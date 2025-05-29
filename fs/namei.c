@@ -371,6 +371,7 @@ static inline int do_inode_permission(struct vfsmount *mnt, struct inode *inode,
 	}
 	return generic_permission(inode, mask);
 }
+EXPORT_SYMBOL(__inode_permission);
 
 /**
  * __inode_permission - Check for access rights to a given inode
@@ -2279,23 +2280,6 @@ user_path_parent(int dfd, const char __user *path, struct nameidata *nd,
 }
 
 /*
- * It's inline, so penalty for filesystems that don't use sticky bit is
- * minimal.
- */
-static inline int check_sticky(struct inode *dir, struct inode *inode)
-{
-	kuid_t fsuid = current_fsuid();
-
-	if (!(dir->i_mode & S_ISVTX))
-		return 0;
-	if (uid_eq(inode->i_uid, fsuid))
-		return 0;
-	if (uid_eq(dir->i_uid, fsuid))
-		return 0;
-	return !capable_wrt_inode_uidgid(inode, CAP_FOWNER);
-}
-
-/*
  *	Check whether we can remove a link victim from directory dir, check
  *  whether the type of victim is right.
  *  1. We can't do it if dir is read-only (done in permission())
@@ -2972,9 +2956,11 @@ finish_open_created:
 	error = may_open(&nd->path, acc_mode, open_flag);
 	if (error)
 		goto out;
-	file->f_path.mnt = nd->path.mnt;
-	error = finish_open(file, nd->path.dentry, NULL, opened);
-	if (error) {
+	BUG_ON(*opened & FILE_OPENED); /* once it's opened, it's opened */
+ 	error = vfs_open(&nd->path, file, current_cred());
+ 	if (!error) {
+ 		*opened |= FILE_OPENED;
+ 	} else {
 		if (error == -EOPENSTALE)
 			goto stale_open;
 		goto out;
