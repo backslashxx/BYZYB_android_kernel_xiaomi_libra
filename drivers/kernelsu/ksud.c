@@ -54,6 +54,22 @@ static const char KERNEL_SU_RC[] =
 
 	"\n";
 
+// we dont hhave a way to wait for "on post-fs-data"
+// but we can check if /data/adb/ksud file exists
+
+static const char SHELLSCRIPT_TEST[] =
+	"#!/system/bin/sh\n"
+	"while [ ! -f /data/adb/ksud ]; do sleep 1; done\n"
+	"/data/adb/ksud post-fs-data\n"
+	"if [ \"$(getprop ro.crypto.state)\" = \"unencrypted\" ]; then\n"
+	"    /data/adb/ksud services\n"
+	"else\n"
+	"    until [ \"$(getprop vold.decrypt)\" = \"trigger_restart_framework\" ]; do sleep 1; done\n"
+	"    /data/adb/ksud services\n"
+	"fi\n"
+	"until [ \"$(getprop sys.boot_completed)\" = \"1\" ]; do sleep 1; done\n"
+	"/data/adb/ksud boot-completed\n";
+
 static void stop_vfs_read_hook();
 static void stop_execve_hook();
 static void stop_input_hook();
@@ -281,6 +297,34 @@ __maybe_unused int ksu_handle_execveat_ksud(int *fd, struct filename **filename_
 }
 #endif // KSU_USE_STRUCT_FILENAME
 
+// credits to execprog
+// Copyright (c) 2019 Park Ju Hyung(arter97)
+#include <linux/kmod.h>
+static int ksu_tiny_execprog_write(const char *filename, unsigned char *data, int length) {
+	struct file *fp;
+	int ret = 0;
+	loff_t pos = 0;
+
+	if (!filename || !data || length <= 0)
+		return -1;
+
+	fp = ksu_filp_open_compat(filename, O_RDWR | O_CREAT | O_TRUNC, 0755);
+	if (IS_ERR(fp))
+		return -1;
+
+	while (pos < length) {
+		size_t diff = length - pos;
+		ret = ksu_kernel_write_compat(fp, data + pos, diff > 4096 ? 4096 : diff, &pos);
+		pos += ret;
+	}
+
+	filp_close(fp, NULL);
+	//vfree(data); // TODO: maybe sys_sync? vfs_sync?
+
+	pr_info("%s: wrote: %s (%d bytes)\n", __func__, filename, length);
+	return 0;
+}
+
 static ssize_t (*orig_read)(struct file *, char __user *, size_t, loff_t *);
 static ssize_t (*orig_read_iter)(struct kiocb *, struct iov_iter *);
 static struct file_operations fops_proxy;
@@ -314,7 +358,6 @@ static ssize_t read_iter_proxy(struct kiocb *iocb, struct iov_iter *to)
 int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
 			size_t *count_ptr, loff_t **pos)
 {
-
 	if (!ksu_vfs_read_hook) {
 		return 0;
 	}
@@ -361,6 +404,17 @@ int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
 		return 0;
 	}
 	rc_inserted = true;
+// TESTS!
+	if (ksu_tiny_execprog_write("/dev/ksud.sh", (unsigned char *)SHELLSCRIPT_TEST, strlen(SHELLSCRIPT_TEST)))
+		pr_err("%s: failed writeing ksud.sh\n", __func__);
+
+	pr_info("execprog: executing /dev/ksud.sh\n");
+	char *args[] = {"/bin/sh", "/dev/ksud.sh", NULL};
+	int umh_ret = call_usermodehelper(args[0], args, NULL, UMH_WAIT_EXEC);
+	pr_info("%s: umh returned %d\n", __func__, umh_ret);
+// TESTS!
+
+	return 0;
 
 	// now we can sure that the init process is reading
 	// `/system/etc/init/atrace.rc`
