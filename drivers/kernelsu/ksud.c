@@ -83,7 +83,15 @@ void on_post_fs_data(void)
 // since _ksud handler only uses argv and envp for comparisons
 // this can probably work
 // adapted from ksu_handle_execveat_ksud
-static int ksu_handle_bprm_ksud(const char *filename, const char *argv1, const char *envp, size_t envp_len)
+struct ksud_param {
+	const char *filename;
+	const char *argv1;
+	const char *envp;
+	size_t envp_len;
+};
+
+//static int ksu_handle_bprm_ksud(const char *filename, const char *argv1, const char *envp, size_t envp_len)
+static int ksu_handle_bprm_ksud(struct ksud_param *param)
 {
 	static const char app_process[] = "/system/bin/app_process";
 	static bool first_app_process = true;
@@ -97,6 +105,11 @@ static int ksu_handle_bprm_ksud(const char *filename, const char *argv1, const c
 	// return early when disabled
 	if (!ksu_execveat_hook)
 		return 0;
+
+	const char *filename = param->filename;
+	const char *argv1 = param->argv1;
+	const char *envp = param->envp;
+	size_t envp_len  = param->envp_len;
 
 	if (!filename)
 		return 0;
@@ -225,7 +238,14 @@ int ksu_handle_pre_ksud(const char *filename)
 	if (argv1 >= args + argv_copy_len) // out of bounds!
 		argv1 = "";
 
-	return ksu_handle_bprm_ksud(filename, argv1, envp, envp_copy_len);
+	struct ksud_param param = {
+		.filename = filename,
+		.argv1 = argv1,
+		.envp = envp,
+		.envp_len = envp_copy_len,
+	};
+
+	return ksu_handle_bprm_ksud(&param);
 }
 
 static ssize_t (*orig_read)(struct file *, char __user *, size_t, loff_t *);
