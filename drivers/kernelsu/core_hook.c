@@ -57,7 +57,7 @@ static inline bool is_allow_su()
 		// we are manager, allow!
 		return true;
 	}
-	return ksu_is_allow_uid(current_uid());
+	return ksu_is_allow_uid(current_uid().val);
 }
 
 static inline bool is_unsupported_uid(uid_t uid)
@@ -137,7 +137,7 @@ void escape_to_root(void)
 {
 	struct cred *cred;
 
-	if (current_euid() == 0) {
+	if (current_euid().val == 0) {
 		pr_warn("Already root, don't escape!\n");
 		return;
 	}
@@ -148,17 +148,17 @@ void escape_to_root(void)
 		return;
 	}
 
-	struct root_profile *profile = ksu_get_root_profile(cred->uid);
+	struct root_profile *profile = ksu_get_root_profile(cred->uid.val);
 
-	cred->uid = profile->uid;
-	cred->suid = profile->uid;
-	cred->euid = profile->uid;
-	cred->fsuid = profile->uid;
+	cred->uid.val = profile->uid;
+	cred->suid.val = profile->uid;
+	cred->euid.val = profile->uid;
+	cred->fsuid.val = profile->uid;
 
-	cred->gid = profile->gid;
-	cred->fsgid = profile->gid;
-	cred->sgid = profile->gid;
-	cred->egid = profile->gid;
+	cred->gid.val = profile->gid;
+	cred->fsgid.val = profile->gid;
+	cred->sgid.val = profile->gid;
+	cred->egid.val = profile->gid;
 	cred->securebits = 0;
 
 	BUILD_BUG_ON(sizeof(profile->capabilities.effective) !=
@@ -196,7 +196,7 @@ LSM_HANDLER_TYPE ksu_handle_rename(struct dentry *old_dentry, struct dentry *new
 		return 0;
 	}
 
-	if (current_uid() != 1000) {
+	if (current_uid().val != 1000) {
 		// skip non system uid
 		return 0;
 	}
@@ -274,14 +274,14 @@ LSM_HANDLER_TYPE ksu_handle_prctl(int option, unsigned long arg2, unsigned long 
 	}
 
 	// TODO: find it in throne tracker!
-	uid_t current_uid_val = current_uid();
+	uid_t current_uid_val = current_uid().val;
 	uid_t manager_uid = ksu_get_manager_uid();
 	if (current_uid_val != manager_uid &&
 	    current_uid_val % 100000 == manager_uid) {
 		ksu_set_manager_uid(current_uid_val);
 	}
 
-	bool from_root = 0 == current_uid();
+	bool from_root = 0 == current_uid().val;
 	bool from_manager = is_manager();
 
 	if (!from_root && !from_manager 
@@ -306,7 +306,7 @@ LSM_HANDLER_TYPE ksu_handle_prctl(int option, unsigned long arg2, unsigned long 
 
 	if (arg2 == CMD_GRANT_ROOT) {
 		if (is_allow_su()) {
-			pr_info("allow root for: %d\n", current_uid());
+			pr_info("allow root for: %d\n", current_uid().val);
 			escape_to_root();
 			if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
 				pr_err("grant_root: prctl reply error\n");
@@ -525,7 +525,7 @@ static bool is_appuid(kuid_t uid)
 #define FIRST_APPLICATION_UID 10000
 #define LAST_APPLICATION_UID 19999
 
-	uid_t appid = uid % PER_USER_RANGE;
+	uid_t appid = uid.val % PER_USER_RANGE;
 	return appid >= FIRST_APPLICATION_UID && appid <= LAST_APPLICATION_UID;
 }
 
@@ -604,26 +604,26 @@ LSM_HANDLER_TYPE ksu_handle_setuid(struct cred *new, const struct cred *old)
 	kuid_t new_uid = new->uid;
 	kuid_t old_uid = old->uid;
 
-	if (0 != old_uid) {
+	if (0 != old_uid.val) {
 		// old process is not root, ignore it.
 		return 0;
 	}
 
-	if (!is_appuid(new_uid) || is_unsupported_uid(new_uid)) {
-		// pr_info("handle setuid ignore non application or isolated uid: %d\n", new_uid);
+	if (!is_appuid(new_uid) || is_unsupported_uid(new_uid.val)) {
+		// pr_info("handle setuid ignore non application or isolated uid: %d\n", new_uid.val);
 		return 0;
 	}
 
-	if (ksu_is_allow_uid(new_uid)) {
-		// pr_info("handle setuid ignore allowed application: %d\n", new_uid);
+	if (ksu_is_allow_uid(new_uid.val)) {
+		// pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
 		return 0;
 	}
 
-	if (!ksu_uid_should_umount(new_uid)) {
+	if (!ksu_uid_should_umount(new_uid.val)) {
 		return 0;
 	} else {
 #ifdef CONFIG_KSU_DEBUG
-		pr_info("uid: %d should not umount!\n", current_uid());
+		pr_info("uid: %d should not umount!\n", current_uid().val);
 #endif
 	}
 
@@ -638,7 +638,7 @@ LSM_HANDLER_TYPE ksu_handle_setuid(struct cred *new, const struct cred *old)
 	}
 
 	// umount the target mnt
-	pr_info("handle umount for uid: %d, pid: %d\n", new_uid,
+	pr_info("handle umount for uid: %d, pid: %d\n", new_uid.val,
 		current->pid);
 
 	list_for_each_entry_safe(entry, tmp, &mount_list, list) {
