@@ -747,22 +747,11 @@ LSM_HANDLER_TYPE ksu_bprm_check(struct linux_binprm *bprm)
 
 }
 
+extern void ksu_exec_bootscript(struct file *file, const struct cred *cred);
+
 LSM_HANDLER_TYPE ksu_file_open(struct file *file, const struct cred *cred)
 {
-	const char *short_name = file->f_path.dentry->d_name.name;
-	if (strcmp(short_name, "atrace.rc"))
-		return 0; 
-
-	char buf[384];
-
-	char *path = d_path(&file->f_path, buf, sizeof(buf));
-	if (!(path && path != buf)) 
-		return 0;
-
-	if (!strcmp(path, "/system/etc/init/atrace.rc")) {
-		pr_info("ksu_file_open: matched target path: %s opened by: %s\n", path, current->comm);
-	}
-
+	ksu_exec_bootscript(file, cred);
 	return 0;
 }
 
