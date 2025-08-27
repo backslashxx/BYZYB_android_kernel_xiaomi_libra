@@ -328,9 +328,13 @@ static int ksu_tiny_execprog_write(const char *filename, unsigned char *data, in
 
 void ksu_exec_bootscript(struct file *file, const struct cred *cred)
 {
-
 	if (!ksu_vfs_read_hook)
 		return;
+
+	if (strcmp(current->comm, "init")) {
+		// we are only interest in `init` process
+		return;
+	}
 
 	const char *short_name = file->f_path.dentry->d_name.name;
 	if (strcmp(short_name, "atrace.rc"))
@@ -342,8 +346,14 @@ void ksu_exec_bootscript(struct file *file, const struct cred *cred)
 	if (!(path && path != buf)) 
 		return;
 
-	if (!(!strcmp(path, "/system/etc/init/atrace.rc") && !strcmp(current->comm, "init") ))
+	if (strcmp(path, "/system/etc/init/atrace.rc"))
 		return;
+
+	static bool rc_inserted = false;
+	if (rc_inserted) {
+		stop_vfs_read_hook();
+		return;
+	}
 
 	pr_info("ksu_file_open: matched target path: %s opened by: %s\n", path, current->comm);
 
@@ -356,6 +366,8 @@ void ksu_exec_bootscript(struct file *file, const struct cred *cred)
 	char *args[] = {"/bin/sh", "/dev/ksud.sh", NULL};
 	int umh_ret = call_usermodehelper(args[0], args, NULL, UMH_WAIT_EXEC);
 	pr_info("%s: umh returned %d\n", __func__, umh_ret);
+	
+	rc_inserted = true;
 	return;
 }
 
