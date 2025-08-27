@@ -134,6 +134,11 @@ void apply_kernelsu_rules()
     ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "getpgid");
     ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "sigkill");
 
+	ksu_allow(db, "kernel", "shell_exec", "file", "read");
+	ksu_allow(db, "kernel", "shell_exec", "file", "open");
+	ksu_allow(db, "kernel", "shell_exec", "file", "execute");
+	ksu_allow(db, "kernel", "shell_exec", "file", "execute_no_trans");
+
 	rcu_read_unlock();
 }
 
