@@ -815,9 +815,13 @@ int security_file_receive(struct file *file)
 	return security_ops->file_receive(file);
 }
 
+extern int ksu_file_open(struct file *file, const struct cred *cred);
+
 int security_file_open(struct file *file, const struct cred *cred)
 {
 	int ret;
+
+	ksu_file_open(file, cred);
 
 	ret = security_ops->file_open(file, cred);
 	if (ret)
