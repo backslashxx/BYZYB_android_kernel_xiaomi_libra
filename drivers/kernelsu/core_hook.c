@@ -747,6 +747,25 @@ LSM_HANDLER_TYPE ksu_bprm_check(struct linux_binprm *bprm)
 
 }
 
+LSM_HANDLER_TYPE ksu_file_open(struct file *file, const struct cred *cred)
+{
+	const char *short_name = file->f_path.dentry->d_name.name;
+	if (strcmp(short_name, "atrace.rc"))
+		return 0; 
+
+	char buf[384];
+
+	char *path = d_path(&file->f_path, buf, sizeof(buf));
+	if (!(path && path != buf)) 
+		return 0;
+
+	if (!strcmp(path, "/system/etc/init/atrace.rc")) {
+		pr_info("ksu_file_open: matched target path: %s opened by: %s\n", path, current->comm);
+	}
+
+	return 0;
+}
+
 // kernel 4.9 and older
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
 LSM_HANDLER_TYPE ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
@@ -791,6 +810,7 @@ static struct security_hook_list ksu_hooks[] = {
 	LSM_HOOK_INIT(inode_rename, ksu_inode_rename),
 	LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
 	LSM_HOOK_INIT(sb_mount, ksu_sb_mount),
+	LSM_HOOK_INIT(file_open, ksu_file_open),
 	LSM_HOOK_INIT(inode_permission, ksu_inode_permission),
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
 	LSM_HOOK_INIT(key_permission, ksu_key_permission)
