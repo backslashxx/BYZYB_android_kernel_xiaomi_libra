@@ -1395,11 +1395,11 @@ SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
 	int errno = 0;
 
 	down_read(&uts_sem);
+#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
+	susfs_spoof_uname(utsname());
+#endif
 	if (copy_to_user(name, utsname(), sizeof *name))
 		errno = -EFAULT;
-#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
-	susfs_spoof_uname(&tmp);
-#endif
 	up_read(&uts_sem);
 
 	if (!errno && override_release(name->release, sizeof(name->release)))
