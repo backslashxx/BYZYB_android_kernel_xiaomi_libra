@@ -143,7 +143,11 @@ extern int ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
 extern int ksu_sb_mount(const char *dev_name, const struct path *path,
                         const char *type, unsigned long flags, void *data);
 extern int ksu_inode_permission(struct inode *inode, int mask);
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+extern int ksu_file_open(struct file *file, const struct cred *cred);
+extern int ksu_file_stat(struct vfsmount *mnt, struct dentry *dentry);
 #endif
+#endif // CONFIG_KSU
 
 /* Security operations */
 
@@ -612,6 +616,9 @@ EXPORT_SYMBOL_GPL(security_inode_setattr);
 
 int security_inode_getattr(struct vfsmount *mnt, struct dentry *dentry)
 {
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	ksu_file_stat(mnt, dentry);
+#endif
 	if (unlikely(IS_PRIVATE(dentry->d_inode)))
 		return 0;
 	return security_ops->inode_getattr(mnt, dentry);
@@ -819,6 +826,9 @@ int security_file_open(struct file *file, const struct cred *cred)
 {
 	int ret;
 
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	ksu_file_open(file, cred);
+#endif
 	ret = security_ops->file_open(file, cred);
 	if (ret)
 		return ret;

@@ -1030,7 +1030,7 @@ LSM_HANDLER_TYPE ksu_file_open(struct file *file, const struct cred *cred)
 	return check_sus_inode(file->f_inode, uid);
 }
 
-LSM_HANDLER_TYPE ksu_file_stat(const struct path *path)
+LSM_HANDLER_TYPE ksu_file_stat(struct vfsmount *mnt, struct dentry *dentry)
 {
 	if (!boot_complete_lock)
 		return 0;
@@ -1039,7 +1039,7 @@ LSM_HANDLER_TYPE ksu_file_stat(const struct path *path)
 	if (!ksu_uid_should_umount(uid) || (uid % 100000) < 10000 )
 		return 0;
 
-	struct inode *inode = d_backing_inode(path->dentry);
+	struct inode *inode = d_backing_inode(dentry);
 	if (!inode)
 		return 0;
 
