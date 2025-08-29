@@ -1571,6 +1571,10 @@ struct task_struct {
 /* hung task detection */
 	unsigned long last_switch_count;
 #endif
+#ifdef CONFIG_KSU_SUSFS
+	u64 susfs_task_state;
+	u64 susfs_last_fake_mnt_id;
+#endif
 /* CPU-specific state of this task */
 	struct thread_struct thread;
 /* filesystem information */
