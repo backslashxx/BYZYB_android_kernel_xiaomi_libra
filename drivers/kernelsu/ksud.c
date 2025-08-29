@@ -63,15 +63,15 @@ bool ksu_input_hook __read_mostly = true;
 
 u32 ksu_devpts_sid;
 
-void on_post_fs_data(void)
+void ksu_on_post_fs_data(void)
 {
 	static bool done = false;
 	if (done) {
-		pr_info("on_post_fs_data already done\n");
+		pr_info("ksu_on_post_fs_data already done\n");
 		return;
 	}
 	done = true;
-	pr_info("on_post_fs_data!\n");
+	pr_info("ksu_on_post_fs_data!\n");
 	ksu_load_allow_list();
 	// sanity check, this may influence the performance
 	stop_input_hook();
@@ -83,15 +83,7 @@ void on_post_fs_data(void)
 // since _ksud handler only uses argv and envp for comparisons
 // this can probably work
 // adapted from ksu_handle_execveat_ksud
-struct ksud_param {
-	const char *filename;
-	const char *argv1;
-	const char *envp;
-	size_t envp_len;
-};
-
-//static int ksu_handle_bprm_ksud(const char *filename, const char *argv1, const char *envp, size_t envp_len)
-static int ksu_handle_bprm_ksud(struct ksud_param *param)
+static int ksu_handle_bprm_ksud(const char *filename, const char *argv1, const char *envp, size_t envp_len)
 {
 	static const char app_process[] = "/system/bin/app_process";
 	static bool first_app_process = true;
@@ -105,11 +97,6 @@ static int ksu_handle_bprm_ksud(struct ksud_param *param)
 	// return early when disabled
 	if (!ksu_execveat_hook)
 		return 0;
-
-	const char *filename = param->filename;
-	const char *argv1 = param->argv1;
-	const char *envp = param->envp;
-	size_t envp_len  = param->envp_len;
 
 	if (!filename)
 		return 0;
@@ -126,7 +113,7 @@ static int ksu_handle_bprm_ksud(struct ksud_param *param)
 		&& (!memcmp(filename, system_bin_init, sizeof(system_bin_init) - 1))) {
 		if (argv1 && !strcmp(argv1, "second_stage")) {
 			pr_info("%s: /system/bin/init second_stage executed\n", __func__);
-			apply_kernelsu_rules();
+			ksu_apply_kernelsu_rules();
 			init_second_stage_executed = true;
 			ksu_android_ns_fs_check();
 		}
@@ -137,7 +124,7 @@ static int ksu_handle_bprm_ksud(struct ksud_param *param)
 		&& (!memcmp(filename, old_system_init, sizeof(old_system_init) - 1))) {
 		if (argv1 && !strcmp(argv1, "--second-stage")) {
 			pr_info("%s: /init --second-stage executed\n", __func__);
-			apply_kernelsu_rules();
+			ksu_apply_kernelsu_rules();
 			init_second_stage_executed = true;
 			ksu_android_ns_fs_check();
 		}
@@ -161,7 +148,7 @@ static int ksu_handle_bprm_ksud(struct ksud_param *param)
 		if (!strcmp(envp_n, "INIT_SECOND_STAGE=1")
 			|| !strcmp(envp_n, "INIT_SECOND_STAGE=true") ) {
 			pr_info("%s: /init +envp: INIT_SECOND_STAGE executed\n", __func__);
-			apply_kernelsu_rules();
+			ksu_apply_kernelsu_rules();
 			init_second_stage_executed = true;
 			ksu_android_ns_fs_check();
 		}
@@ -171,7 +158,7 @@ first_app_process:
 	if (first_app_process && !memcmp(filename, app_process, sizeof(app_process) - 1)) {
 		first_app_process = false;
 		pr_info("%s: exec app_process, /data prepared, second_stage: %d\n", __func__, init_second_stage_executed);
-		on_post_fs_data();
+		ksu_on_post_fs_data();
 		stop_execve_hook();
 	}
 
@@ -238,14 +225,7 @@ int ksu_handle_pre_ksud(const char *filename)
 	if (argv1 >= args + argv_copy_len) // out of bounds!
 		argv1 = "";
 
-	struct ksud_param param = {
-		.filename = filename,
-		.argv1 = argv1,
-		.envp = envp,
-		.envp_len = envp_copy_len,
-	};
-
-	return ksu_handle_bprm_ksud(&param);
+	return ksu_handle_bprm_ksud(filename, argv1, envp, envp_copy_len);
 }
 
 static ssize_t (*orig_read)(struct file *, char __user *, size_t, loff_t *);
