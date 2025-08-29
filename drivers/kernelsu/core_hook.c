@@ -1039,7 +1039,7 @@ LSM_HANDLER_TYPE ksu_file_stat(struct vfsmount *mnt, struct dentry *dentry)
 	if (!ksu_uid_should_umount(uid) || (uid % 100000) < 10000 )
 		return 0;
 
-	struct inode *inode = d_backing_inode(dentry);
+	struct inode *inode = dentry->d_inode;
 	if (!inode)
 		return 0;
 
