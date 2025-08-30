@@ -709,7 +709,10 @@ KBUILD_CFLAGS += -Wno-address-of-packed-member \
 		-Wno-pointer-to-int-cast \
 		-Wno-tautological-compare \
 		-Wno-unused-const-variable \
-		-Wno-pointer-bool-conversion
+		-Wno-pointer-bool-conversion \
+		-Wno-default-const-init-var-unsafe \
+		-Wno-default-const-init-field-unsafe \
+		-Wno-implicit-enum-enum-cast
 ifeq ($(ld-name),lld)
 KBUILD_CFLAGS += -fuse-ld=lld
 endif
