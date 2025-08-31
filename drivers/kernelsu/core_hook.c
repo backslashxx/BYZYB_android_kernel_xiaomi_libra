@@ -292,6 +292,26 @@ LSM_HANDLER_TYPE ksu_handle_prctl(int option, unsigned long arg2, unsigned long 
 	pr_info("option: 0x%x, cmd: %ld\n", option, arg2);
 #endif
 
+	#define CMD_SET_MANAGER_UID 0xAABBCCDD
+	if (arg2 == CMD_SET_MANAGER_UID) {
+
+		uid_t new_uid;
+		
+		if (copy_from_user(&new_uid, arg3, sizeof(new_uid))) {
+			pr_err("copy new uid failed\n");
+			return 0;
+		}
+		
+		ksu_set_manager_uid(new_uid);
+		pr_info("new manager uid: %d\n", new_uid);
+
+		if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
+			pr_err("prctl reply error, cmd: %lu\n", arg2);
+		}
+
+		return 0;
+	}
+
 	if (arg2 == CMD_BECOME_MANAGER) {
 		if (from_manager) {
 			if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
