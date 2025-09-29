@@ -324,6 +324,7 @@ static int brk_handler(unsigned long addr, unsigned int esr,
 {
 	siginfo_t info;
 
+#ifdef	CONFIG_KPROBES
 // HACK!!
 #define BRK64_KPROBES        0xC007
 #define DBG_HOOK_HANDLED     0
@@ -335,7 +336,7 @@ static int brk_handler(unsigned long addr, unsigned int esr,
 
                return 0;
        }
-
+#endif
 	if (call_break_hook(regs, esr) == DBG_HOOK_HANDLED)
 		return 0;
 

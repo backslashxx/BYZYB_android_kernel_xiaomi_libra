@@ -136,10 +136,7 @@ arm_kprobe_decode_insn(kprobe_opcode_t insn, struct arch_specific_insn *asi)
 
 	asi->prepare = prepare_none;
 
-	if (aarch64_insn_is_bcond(insn)) {
-		asi->prepare = prepare_bcond;
-		asi->handler = simulate_b_cond;
-	} else if (aarch64_insn_is_cb(insn)) {
+	if (aarch64_insn_is_cb(insn)) {
 		asi->prepare = prepare_cbz_cbnz;
 		asi->handler = simulate_cbz_cbnz;
 	} else if (aarch64_insn_is_tb(insn)) {
@@ -149,7 +146,7 @@ arm_kprobe_decode_insn(kprobe_opcode_t insn, struct arch_specific_insn *asi)
 		asi->handler = simulate_adr_adrp;
 	else if (aarch64_insn_is_b_bl(insn))
 		asi->handler = simulate_b_bl;
-	else if (aarch64_insn_is_br_blr(insn) || aarch64_insn_is_ret(insn))
+	else if (aarch64_insn_is_br_blr(insn))
 		asi->handler = simulate_br_blr_ret;
 	else if (aarch64_insn_is_ldr_lit(insn))
 		asi->handler = simulate_ldr_literal;
