@@ -271,15 +271,15 @@ static int unregister_kprobe_function(void *data)
 	pr_info("kp_ksud: unregistering kprobes...\n");
 
 #if defined(CONFIG_KRETPROBES) && LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
-	unregister_kretprobe(&bounded_transition_rp);
+	//unregister_kretprobe(&bounded_transition_rp);
 	pr_info("kp_ksud: unregister kretprobe: security_bounded_transition ret: ??\n");
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
-	unregister_kprobe_logged(&key_permission_kp);
+	//unregister_kprobe_logged(&key_permission_kp);
 #endif
 
-	unregister_kprobe_logged(&input_event_kp);
+	//unregister_kprobe_logged(&input_event_kp);
 	//unregister_kprobe_logged(&sys_execve_kp);
 	unregister_kprobe_logged(&vfs_read_kp);
 	
@@ -306,15 +306,15 @@ static void register_kprobe_logged(struct kprobe *kp)
 void kp_ksud_init()
 {
 	register_kprobe_logged(&vfs_read_kp);
-	register_kprobe_logged(&input_event_kp);
+	//register_kprobe_logged(&input_event_kp);
 	//register_kprobe_logged(&sys_execve_kp);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
-	register_kprobe_logged(&key_permission_kp);
+	//register_kprobe_logged(&key_permission_kp);
 #endif
 
 #if defined(CONFIG_KRETPROBES) && LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
-	int ret = register_kretprobe(&bounded_transition_rp);
-	pr_info("kp_ksud: register kretprobe: security_bounded_transition ret: %d\n", ret);
+	//int ret = register_kretprobe(&bounded_transition_rp);
+	//pr_info("kp_ksud: register kretprobe: security_bounded_transition ret: %d\n", ret);
 #endif
 }
