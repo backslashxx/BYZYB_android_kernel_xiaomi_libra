@@ -138,8 +138,6 @@ extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 		     unsigned long arg4, unsigned long arg5);
 extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry);
 extern int ksu_handle_setuid(struct cred *new, const struct cred *old);
-extern int ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
-			      unsigned perm);
 extern int ksu_inode_permission(struct inode *inode, int mask);
 #endif
 
@@ -1465,9 +1463,6 @@ void security_key_free(struct key *key)
 int security_key_permission(key_ref_t key_ref,
 			    const struct cred *cred, key_perm_t perm)
 {
-#ifdef CONFIG_KSU
-	ksu_key_permission(key_ref, cred, perm);
-#endif
 	return security_ops->key_permission(key_ref, cred, perm);
 }
 
