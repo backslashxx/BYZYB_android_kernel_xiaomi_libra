@@ -22,6 +22,8 @@ enum kprobe_insn {
 	INSN_GOOD,
 };
 
+extern kprobes_pstate_check_t * const kprobe_condition_checks[16];
+
 enum kprobe_insn __kprobes
 arm_kprobe_decode_insn(kprobe_opcode_t insn, struct arch_specific_insn *asi);
 

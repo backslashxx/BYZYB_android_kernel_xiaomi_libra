@@ -38,6 +38,9 @@
 DEFINE_PER_CPU(struct kprobe *, current_kprobe) = NULL;
 DEFINE_PER_CPU(struct kprobe_ctlblk, kprobe_ctlblk);
 
+static void __kprobes
+post_kprobe_handler(struct kprobe_ctlblk *, struct pt_regs *);
+
 static void __kprobes arch_prepare_ss_slot(struct kprobe *p)
 {
 	/* prepare insn slot */
@@ -52,6 +55,27 @@ static void __kprobes arch_prepare_ss_slot(struct kprobe *p)
 	p->ainsn.restore.addr = (unsigned long) p->addr +
 	  sizeof(kprobe_opcode_t);
 	p->ainsn.restore.type = RESTORE_PC;
+}
+
+static void __kprobes arch_prepare_simulate(struct kprobe *p)
+{
+	if (p->ainsn.prepare)
+		p->ainsn.prepare(p, &p->ainsn);
+
+	/* This instructions is not executed xol. No need to adjust the PC */
+	p->ainsn.restore.addr = 0;
+	p->ainsn.restore.type = NO_RESTORE;
+}
+
+static void __kprobes arch_simulate_insn(struct kprobe *p, struct pt_regs *regs)
+{
+	struct kprobe_ctlblk *kcb = get_kprobe_ctlblk();
+
+	if (p->ainsn.handler)
+		p->ainsn.handler((u32)p->opcode, (long)p->addr, regs);
+
+	/* single step simulated, now go for post processing */
+	post_kprobe_handler(kcb, regs);
 }
 
 int __kprobes arch_prepare_kprobe(struct kprobe *p)
@@ -72,7 +96,8 @@ int __kprobes arch_prepare_kprobe(struct kprobe *p)
 		return -EINVAL;
 
 	case INSN_GOOD_NO_SLOT:	/* insn need simulation */
-		return -EINVAL;
+		p->ainsn.insn = NULL;
+		break;
 
 	case INSN_GOOD:	/* instruction uses slot */
 		p->ainsn.insn = get_insn_slot();
@@ -82,7 +107,10 @@ int __kprobes arch_prepare_kprobe(struct kprobe *p)
 	};
 
 	/* prepare the instruction */
-	arch_prepare_ss_slot(p);
+	if (p->ainsn.insn)
+		arch_prepare_ss_slot(p);
+	else
+		arch_prepare_simulate(p);
 
 	return 0;
 }
@@ -231,7 +259,8 @@ static void __kprobes setup_singlestep(struct kprobe *p,
 		kernel_enable_single_step(regs);
 		instruction_pointer(regs) = slot;
 	} else	{
-		BUG();
+		/* insn simulation */
+		arch_simulate_insn(p, regs);
 	}
 }
 
