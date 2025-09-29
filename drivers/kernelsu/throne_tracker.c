@@ -15,11 +15,13 @@
 
 #include <linux/kthread.h>
 #include <linux/sched.h>
+#include <linux/mutex.h>
 
 uid_t ksu_manager_uid = KSU_INVALID_UID;
 
 static struct task_struct *throne_thread;
 #define SYSTEM_PACKAGES_LIST_PATH "/data/system/packages.list"
+DEFINE_MUTEX(apk_path_hash_lock);
 
 struct uid_data {
 	struct list_head list;
@@ -199,12 +201,15 @@ FILLDIR_RETURN_TYPE my_actor(MY_ACTOR_CTX_ARG, const char *name,
 #else
 			unsigned int hash = full_name_hash(NULL, dirpath, strlen(dirpath));
 #endif
+			mutex_lock(&apk_path_hash_lock);
 			list_for_each_entry(pos, &apk_path_hash_list, list) {
 				if (hash == pos->hash) {
 					pos->exists = true;
+					mutex_unlock(&apk_path_hash_lock);
 					return FILLDIR_ACTOR_CONTINUE;
 				}
 			}
+			mutex_unlock(&apk_path_hash_lock);
 
 			bool is_manager = is_manager_apk(dirpath);
 			pr_info("Found new base.apk at path: %s, is_manager: %d\n",
@@ -214,15 +219,19 @@ FILLDIR_RETURN_TYPE my_actor(MY_ACTOR_CTX_ARG, const char *name,
 				*my_ctx->stop = 1;
 
 				// Manager found, clear APK cache list
+				mutex_lock(&apk_path_hash_lock);
 				list_for_each_entry_safe(pos, n, &apk_path_hash_list, list) {
 					list_del(&pos->list);
 					kfree(pos);
 				}
+				mutex_unlock(&apk_path_hash_lock);
 			} else {
 				struct apk_path_hash *apk_data = kmalloc(sizeof(struct apk_path_hash), GFP_ATOMIC);
 				apk_data->hash = hash;
 				apk_data->exists = true;
+				mutex_lock(&apk_path_hash_lock);
 				list_add_tail(&apk_data->list, &apk_path_hash_list);
+				mutex_unlock(&apk_path_hash_lock);
 			}
 		}
 	}
@@ -246,9 +255,11 @@ void search_manager(const char *path, int depth, struct list_head *uid_data)
 	
 	// Initialize APK cache list
 	struct apk_path_hash *pos, *n;
+	mutex_lock(&apk_path_hash_lock);
 	list_for_each_entry(pos, &apk_path_hash_list, list) {
 		pos->exists = false;
 	}
+	mutex_unlock(&apk_path_hash_lock);
 
 	// First depth
 	struct data_path data;
@@ -308,12 +319,14 @@ skip_iterate:
 	}
 
 	// Remove stale cached APK entries
+	mutex_lock(&apk_path_hash_lock);
 	list_for_each_entry_safe(pos, n, &apk_path_hash_list, list) {
 		if (!pos->exists) {
 			list_del(&pos->list);
 			kfree(pos);
 		}
 	}
+	mutex_unlock(&apk_path_hash_lock);
 }
 
 static bool is_uid_exist(uid_t uid, char *package, void *data)
