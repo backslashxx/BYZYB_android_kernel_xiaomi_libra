@@ -37,7 +37,9 @@
 #include <linux/slab.h>
 #include <linux/stddef.h>
 #include <linux/export.h>
+#ifdef CONFIG_MODULES
 #include <linux/moduleloader.h>
+#endif
 #include <linux/kallsyms.h>
 #include <linux/freezer.h>
 #include <linux/seq_file.h>
@@ -53,6 +55,7 @@
 #include <asm/cacheflush.h>
 #include <asm/errno.h>
 #include <asm/uaccess.h>
+#include <linux/vmalloc.h>
 
 #define KPROBE_HASH_BITS 6
 #define KPROBE_TABLE_SIZE (1 << KPROBE_HASH_BITS)
@@ -185,7 +188,11 @@ static kprobe_opcode_t __kprobes *__get_insn_slot(struct kprobe_insn_cache *c)
 	 * kernel image and loaded module images reside. This is required
 	 * so x86_64 can correctly handle the %rip-relative fixups.
 	 */
+#ifdef CONFIG_MODULES
 	kip->insns = module_alloc(PAGE_SIZE);
+#else
+	kip->insns = vmalloc(PAGE_SIZE);
+#endif
 	if (!kip->insns) {
 		kfree(kip);
 		return NULL;
@@ -225,7 +232,11 @@ static int __kprobes collect_one_slot(struct kprobe_insn_page *kip, int idx)
 		 */
 		if (!list_is_singular(&kip->list)) {
 			list_del(&kip->list);
+#ifdef CONFIG_MODULES
 			module_memfree(kip->insns);
+#else
+			vfree(kip->insns);
+#endif
 			kfree(kip);
 		}
 		return 1;
@@ -1455,7 +1466,7 @@ static __kprobes int check_kprobe_address_safe(struct kprobe *p,
 		ret = -EINVAL;
 		goto out;
 	}
-
+#ifdef CONFIG_MODULES
 	/* Check if are we probing a module */
 	*probed_mod = __module_text_address((unsigned long) p->addr);
 	if (*probed_mod) {
@@ -1479,6 +1490,9 @@ static __kprobes int check_kprobe_address_safe(struct kprobe *p,
 			ret = -ENOENT;
 		}
 	}
+#else
+	probed_mod = NULL;
+#endif
 out:
 	preempt_enable();
 	jump_label_unlock();
@@ -1540,9 +1554,10 @@ int __kprobes register_kprobe(struct kprobe *p)
 out:
 	mutex_unlock(&kprobe_mutex);
 
+#ifdef CONFIG_MODULES
 	if (probed_mod)
 		module_put(probed_mod);
-
+#endif
 	return ret;
 }
 EXPORT_SYMBOL_GPL(register_kprobe);
@@ -2036,6 +2051,7 @@ void __kprobes dump_kprobe(struct kprobe *kp)
 	       kp->symbol_name, kp->addr, kp->offset);
 }
 
+#ifdef CONFIG_MODULES
 /* Module notifier call back, checking kprobes on the module */
 static int __kprobes kprobes_module_callback(struct notifier_block *nb,
 					     unsigned long val, void *data)
@@ -2078,6 +2094,7 @@ static struct notifier_block kprobe_module_nb = {
 	.notifier_call = kprobes_module_callback,
 	.priority = 0
 };
+#endif
 
 static int __init init_kprobes(void)
 {
@@ -2144,8 +2161,10 @@ static int __init init_kprobes(void)
 	err = arch_init_kprobes();
 	if (!err)
 		err = register_die_notifier(&kprobe_exceptions_nb);
+#ifdef CONFIG_MODULES
 	if (!err)
 		err = register_module_notifier(&kprobe_module_nb);
+#endif
 
 	kprobes_initialized = (err == 0);
 
