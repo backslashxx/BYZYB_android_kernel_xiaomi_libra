@@ -541,7 +541,7 @@ void __init hook_debug_fault_code(int nr,
 	debug_fault_info[nr].code	= code;
 	debug_fault_info[nr].name	= name;
 }
-NOKPROBE_SYMBOL(do_debug_exception);
+//NOKPROBE_SYMBOL(do_debug_exception);
 
 asmlinkage int __exception do_debug_exception(unsigned long addr,
 					      unsigned int esr,
