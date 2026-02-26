@@ -402,14 +402,12 @@ void ksu_persistent_allow_list_fn()
 		goto close_file;
 	}
 
-	mutex_lock(&allowlist_mutex);
 	list_for_each_entry (p, &allow_list, list) {
 		pr_info("save allow list, name: %s uid :%d, allow: %d\n",
 				p->profile.key, p->profile.current_uid, p->profile.allow_su);
 
 		ksu_kernel_write_compat(fp, &p->profile, sizeof(p->profile), &off);
 	}
-	mutex_unlock(&allowlist_mutex);
 
 close_file:
 	filp_close(fp, 0);
@@ -423,26 +421,26 @@ static int persistent_allow_list_pre(void *data)
 {
 	pr_info("ksu_persistent_allow_list_fn: pid: %d started\n", current->pid);
 
+	// repurpose the mutex they were holding on ksu_persistent_allow_list_fn
+	// since all this does eventually is to call kernel_write
+	// we hit two birds in one stone. exclusive io + exclusive kthread
+	// there wont be a single instance lock, but for what we need, its finee
+	// we just let other threads stall.
+	// TODO: rethink and evaluate 'mutex-trylock-fail-then-return' here
+	mutex_lock(&allowlist_mutex);
+
 	escape_to_root_forced(); // give permissions for everything
-	ksu_persistent_allow_list_fn();	
-	allowlist_thread = NULL;
-	smp_mb();
-	
+	ksu_persistent_allow_list_fn();
+
+	mutex_unlock(&allowlist_mutex);
+
 	pr_info("ksu_persistent_allow_list_fn: pid: %d exit\n", current->pid);
 	return 0;
 }
 
 void ksu_persistent_allow_list()
 {
-	smp_mb();
-	if (allowlist_thread != NULL)
-		return;
-
 	allowlist_thread = kthread_run(persistent_allow_list_pre, NULL, "allowlist");
-	if (IS_ERR(allowlist_thread)) {
-		allowlist_thread = NULL;
-		return;
-	}
 }
 
 // we can leave this synchronous it seems
