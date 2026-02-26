@@ -79,8 +79,6 @@ static uint8_t allow_list_bitmap[PAGE_SIZE] __read_mostly __aligned(PAGE_SIZE);
 
 #define KERNEL_SU_ALLOWLIST "/data/adb/ksu/.allowlist"
 
-static struct task_struct *allowlist_thread;
-
 void ksu_persistent_allow_list(void);
 
 void ksu_show_allow_list(void)
@@ -440,7 +438,7 @@ static int persistent_allow_list_pre(void *data)
 
 void ksu_persistent_allow_list()
 {
-	allowlist_thread = kthread_run(persistent_allow_list_pre, NULL, "allowlist");
+	kthread_run(persistent_allow_list_pre, NULL, "allowlist");
 }
 
 // we can leave this synchronous it seems
