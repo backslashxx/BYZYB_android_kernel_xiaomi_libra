@@ -657,8 +657,7 @@ static int __ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
 		printk("%s: Unknown file type\n", __func__);
 		return -1;
 	case ATH_OTP_FILE:
-#if defined(CONFIG_CNSS) || defined(HIF_SDIO) || \
-defined(CONFIG_NON_QC_PLATFORM_PCI)
+#if defined(CONFIG_CNSS) || defined(HIF_SDIO)
 		filename = scn->fw_files.otp_data;
 #else
 		filename = QCA_OTP_FILE;
@@ -693,8 +692,11 @@ defined(CONFIG_NON_QC_PLATFORM_PCI)
 			break;
 		}
 #endif
-
-		filename = ol_get_fw_name(scn);
+#if defined(CONFIG_CNSS) || defined(HIF_SDIO)
+		filename = scn->fw_files.image_file;
+#else
+		filename = QCA_FIRMWARE_FILE;
+#endif
 #ifdef QCA_SIGNED_SPLIT_BINARY_SUPPORT
 		bin_sign = TRUE;
 #endif
@@ -750,15 +752,11 @@ defined(CONFIG_NON_QC_PLATFORM_PCI)
 			return -1;
 		}
 		break;
-	case ATH_USB_WARM_RESET_FILE:
-		filename = QCA_USB_WARM_RESET_FILE;
-		break;
 	}
 
-       status = qca_request_firmware(&fw_entry, filename, scn->sc_osdev->device);
-	if (status)
+	if (request_firmware(&fw_entry, filename, scn->sc_osdev->device) != 0)
 	{
-		pr_err("%s: Failed to get %s:%d\n", __func__, filename, status);
+		pr_err("%s: Failed to get %s\n", __func__, filename);
 
 		if (file == ATH_OTP_FILE)
 			return -ENOENT;
@@ -776,11 +774,10 @@ defined(CONFIG_NON_QC_PLATFORM_PCI)
 			pr_info("%s: Trying to load default %s\n",
 							__func__, filename);
 
-			status = qca_request_firmware(&fw_entry, filename,
-					scn->sc_osdev->device);
-			if (status) {
-				pr_err("%s: Failed to get %s:%d\n",
-						__func__, filename, status);
+			if (request_firmware(&fw_entry, filename,
+					scn->sc_osdev->device) != 0) {
+				pr_err("%s: Failed to get %s\n",
+							__func__, filename);
 				kfree(bd_id_filename);
 				return -1;
 			}
@@ -794,8 +791,9 @@ defined(CONFIG_NON_QC_PLATFORM_PCI)
 
 	if (!fw_entry || !fw_entry->data) {
 		pr_err("%s: Invalid fw_entries\n", __func__);
-		status = A_NO_MEMORY;
-		goto release_fw;
+		if (bd_id_filename)
+			kfree(bd_id_filename);
+		return A_ERROR;
 	}
 
 	fw_entry_size = fw_entry->size;
