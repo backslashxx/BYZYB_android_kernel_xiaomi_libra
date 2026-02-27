@@ -1391,11 +1391,11 @@ ifeq ($(CONFIG_GPIO_OOB),y)
 CDEFINES += -DCONFIG_GPIO_OOB
 endif
 
-ifeq ($(CONFIG_NON_QC_PLATFORM), y)
-ifeq ($(CONFIG_ROME_IF),pci)
+#ifeq ($(CONFIG_NON_QC_PLATFORM), y)
+#ifeq ($(CONFIG_ROME_IF),pci)
 CDEFINES += -DCONFIG_NON_QC_PLATFORM_PCI
-endif
-endif
+#endif
+#endif
 
 ifeq ($(CONFIG_ARCH_MDM9640), y)
 CDEFINES += -DFEATURE_AP_MCC_CH_AVOIDANCE
@@ -1579,7 +1579,7 @@ EXTRA_CFLAGS += -Wno-typedef-redefinition
 EXTRA_CFLAGS += -Wno-shift-count-overflow
 EXTRA_CFLAGS += -Wno-non-literal-null-conversion
 EXTRA_CFLAGS += -Wno-logical-not-parentheses
-EXTRA_CFLAGS += -Wno-unused-but-set-variable -Wno-unused-label -Wno-array-parameter
+EXTRA_CFLAGS += -Wno-unused-but-set-variable -Wno-unused-label -Wno-array-parameter -Wno-unused-function
 # EXTRA_CFLAGS += -Wno-error -Wno-incompatible-pointer-types
 endif 
 

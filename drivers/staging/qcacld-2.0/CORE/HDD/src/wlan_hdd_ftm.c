@@ -341,8 +341,10 @@ static VOS_STATUS wlan_ftm_vos_open( v_CONTEXT_t pVosContext, v_SIZE_t hddContex
      goto err_sys_close;
    }
 
+#if defined(QCA_WIFI_FTM)
    ((struct ol_softc *)pHifContext)->enableRamdumpCollection =
                                   pHddCtx->cfg_ini->is_ramdump_enabled;
+#endif
 
    macOpenParms.powersaveOffloadEnabled =
       pHddCtx->cfg_ini->enablePowersaveOffload;

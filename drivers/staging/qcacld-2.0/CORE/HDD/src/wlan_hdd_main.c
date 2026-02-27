@@ -17076,11 +17076,13 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
                  "%s: wlan_hdd_ftm_open Failed",__func__);
           goto err_nl_srv;
       }
+#if defined(QCA_WIFI_FTM)
       if (VOS_STATUS_SUCCESS != hdd_ftm_start(pHddCtx))
       {
           hddLog(VOS_TRACE_LEVEL_FATAL,"%s: hdd_ftm_start Failed",__func__);
           goto err_free_ftm_open;
       }
+#endif
    } else {
 
       //Open watchdog module
@@ -17227,9 +17229,11 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
    if (0 > wlan_hdd_cfg80211_register(pHddCtx->wiphy)) {
       hddLog(VOS_TRACE_LEVEL_ERROR,"%s: wiphy register failed", __func__);
       status = VOS_STATUS_E_FAILURE;
+#if  defined(QCA_WIFI_FTM)
       if (VOS_FTM_MODE == hdd_get_conparam())
          goto err_free_ftm_open;
       else
+#endif
          goto err_vosclose;
    }
 
