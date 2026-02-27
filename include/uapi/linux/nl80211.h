@@ -4062,4 +4062,15 @@ enum nl80211_tdls_peer_capability {
 	NL80211_TDLS_PEER_WMM = 1<<2,
 };
 
+/**
+ * enum nl80211_rxmgmt_flags - flags for received management frame.
+ *
+ * Used by cfg80211_rx_mgmt()
+ *
+ * @NL80211_RXMGMT_FLAG_ANSWERED: frame was answered by device/driver.
+ */
+enum nl80211_rxmgmt_flags {
+	NL80211_RXMGMT_FLAG_ANSWERED = 1 << 0,
+};
+
 #endif /* __LINUX_NL80211_H */
