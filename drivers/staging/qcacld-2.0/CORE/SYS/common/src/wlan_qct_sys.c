@@ -395,12 +395,13 @@ VOS_STATUS sysMcProcessMsg( v_CONTEXT_t pVosContext, vos_msg_t *pMsg )
             }
             break;
          }
+#if defined(QCA_WIFI_FTM)
          case SYS_MSG_ID_FTM_RSP:
          {
              WLANFTM_McProcessMsg((v_VOID_t *)pMsg->bodyptr);
              break;
          }
-
+#endif
          default:
          {
             VOS_TRACE( VOS_MODULE_ID_SYS, VOS_TRACE_LEVEL_ERROR,
