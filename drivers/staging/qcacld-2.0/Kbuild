@@ -109,8 +109,7 @@ HDD_OBJS := 	$(HDD_SRC_DIR)/wlan_hdd_assoc.o \
 		$(HDD_SRC_DIR)/wlan_hdd_trace.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wext.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wmm.o \
-		$(HDD_SRC_DIR)/wlan_hdd_wowl.o \
-		$(HDD_SRC_DIR)/wlan_hdd_spectral.o
+		$(HDD_SRC_DIR)/wlan_hdd_wowl.o
 
 ifeq ($(CONFIG_WLAN_FEATURE_DSRC), y)
 HDD_OBJS+=	$(HDD_SRC_DIR)/wlan_hdd_ocb.o \
@@ -1165,11 +1164,6 @@ endif
 #Enable FLOWMAC module support
 ifeq ($(CONFIG_ATH_SUPPORT_FLOWMAC_MODULE), 1)
 CDEFINES += -DATH_SUPPORT_FLOWMAC_MODULE
-endif
-
-#Enable spectral support
-ifeq ($(CONFIG_ATH_SUPPORT_SPECTRAL), 1)
-CDEFINES += -DATH_SUPPORT_SPECTRAL
 endif
 
 #Enable WDI Event support
