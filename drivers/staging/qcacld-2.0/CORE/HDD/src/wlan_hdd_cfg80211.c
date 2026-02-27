@@ -5887,7 +5887,7 @@ static bool put_wifi_iface_stats(tpSirWifiIfaceStat pWifiIfaceStat,
             return FALSE;
 
         if (FALSE == put_wifi_wmm_ac_stat(
-                &pWifiIfaceStat->ac_stats[i],
+                (tpSirWifiWmmAcStat)&pWifiIfaceStat->ac_stats[i],
                 vendor_event))
         {
             hddLog(VOS_TRACE_LEVEL_ERROR,

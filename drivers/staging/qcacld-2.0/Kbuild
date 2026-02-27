@@ -1579,6 +1579,8 @@ EXTRA_CFLAGS += -Wno-typedef-redefinition
 EXTRA_CFLAGS += -Wno-shift-count-overflow
 EXTRA_CFLAGS += -Wno-non-literal-null-conversion
 EXTRA_CFLAGS += -Wno-logical-not-parentheses
+EXTRA_CFLAGS += -Wno-unused-but-set-variable -Wno-unused-label -Wno-array-parameter
+# EXTRA_CFLAGS += -Wno-error -Wno-incompatible-pointer-types
 endif 
 
 EXTRA_CFLAGS += $(call cc-option, -g0)
