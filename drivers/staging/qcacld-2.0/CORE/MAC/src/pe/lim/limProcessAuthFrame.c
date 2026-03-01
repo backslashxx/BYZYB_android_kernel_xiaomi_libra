@@ -587,7 +587,7 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
     } else if ((auth_alg ==
         eSIR_AUTH_TYPE_SAE) && (LIM_IS_STA_ROLE(psessionEntry))) {
         lim_process_sae_auth_frame(pMac, pRxPacketInfo, psessionEntry);
-        goto free;
+        return;
     } // if (fc.wep)
     else
     {
