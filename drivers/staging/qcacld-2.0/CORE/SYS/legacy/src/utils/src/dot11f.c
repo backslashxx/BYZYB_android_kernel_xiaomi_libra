@@ -6014,7 +6014,7 @@ tANI_U32 dot11fUnpackAddTSResponse(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 
         {offsetof(tDot11fAssocRequest, QOSCapsStation), offsetof(tDot11fIEQOSCapsStation, present), 0, "QOSCapsStation" , 0, 3, 3, SigIeQOSCapsStation, {0, 0, 0, 0, 0}, 0, DOT11F_EID_QOSCAPSSTATION, 0, },
         {offsetof(tDot11fAssocRequest, RRMEnabledCap), offsetof(tDot11fIERRMEnabledCap, present), 0, "RRMEnabledCap" , 0, 7, 7, SigIeRRMEnabledCap, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RRMENABLEDCAP, 0, },
         {offsetof(tDot11fAssocRequest, MobilityDomain), offsetof(tDot11fIEMobilityDomain, present), 0, "MobilityDomain" , 0, 5, 5, SigIeMobilityDomain, {0, 0, 0, 0, 0}, 0, DOT11F_EID_MOBILITYDOMAIN, 0, },
-        {offsetof(tDot11fAssocRequest, dh_parameter_element), offsetof(tDot11fIEdh_parameter_element, present), 0, "dh_parameter_element" , 0, 4, 259, SigIedh_parameter_element, {0, 0, 0, 0, 0}, 0, DOT11F_EID_DH_PARAMETER_ELEMENT, 32, 0, },
+        {offsetof(tDot11fAssocRequest, dh_parameter_element), offsetof(tDot11fIEdh_parameter_element, present), 0, "dh_parameter_element" , 0, 4, 259, SigIedh_parameter_element, {0, 0, 0, 0, 0}, 0, DOT11F_EID_DH_PARAMETER_ELEMENT, 32, },
         {offsetof(tDot11fAssocRequest, WPAOpaque), offsetof(tDot11fIEWPAOpaque, present), 0, "WPAOpaque" , 0, 8, 255, SigIeWPAOpaque, {0, 80, 242, 1, 0}, 4, DOT11F_EID_WPAOPAQUE, 0, },
         {offsetof(tDot11fAssocRequest, HTCaps), offsetof(tDot11fIEHTCaps, present), 0, "HTCaps" , 0, 28, 60, SigIeHTCaps, {0, 0, 0, 0, 0}, 0, DOT11F_EID_HTCAPS, 0, },
         {offsetof(tDot11fAssocRequest, WMMCaps), offsetof(tDot11fIEWMMCaps, present), 0, "WMMCaps" , 0, 9, 9, SigIeWMMCaps, {0, 80, 242, 2, 5}, 5, DOT11F_EID_WMMCAPS, 0, },
