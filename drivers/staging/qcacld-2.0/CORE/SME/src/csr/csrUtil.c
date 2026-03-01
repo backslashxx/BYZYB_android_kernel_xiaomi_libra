@@ -2566,7 +2566,7 @@ tANI_BOOLEAN csrIsAuthType11r( eCsrAuthType AuthType, tANI_U8 mdiePresent)
             return TRUE;
             break;
         case eCSR_AUTH_TYPE_OWE:
-            fRSNProfile = true;
+            return TRUE;
             break;
 
         default:
