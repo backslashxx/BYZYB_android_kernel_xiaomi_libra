@@ -245,7 +245,8 @@ typedef enum
 #ifdef FEATURE_WLAN_ESE
 #define CSR_KRK_KEY_LEN 16
 #endif
-
+/* Cache ID length */
+#define CACHE_ID_LEN 2
 
 typedef struct tagCsrChannelInfo
 {
