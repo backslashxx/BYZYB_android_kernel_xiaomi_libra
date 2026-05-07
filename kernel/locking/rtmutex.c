@@ -876,6 +876,9 @@ static void remove_waiter(struct rt_mutex *lock,
 	struct rt_mutex *next_lock;
 	unsigned long flags;
 
+	if (!waiter_task) /* never enqueued */
+		return;
+
 	// BRICKPORT: use raw_spin_lock to avoid hierarchy mismatch on remote proxy tasks
 	raw_spin_lock(&waiter_task->pi_lock);
 	rt_mutex_dequeue(lock, waiter);
@@ -1425,7 +1428,7 @@ int rt_mutex_start_proxy_lock(struct rt_mutex *lock,
 		ret = 0;
 	}
 
-	if (unlikely(ret))
+	if (unlikely(ret < 0))
 		remove_waiter(lock, waiter);
 
 	raw_spin_unlock(&lock->wait_lock);
