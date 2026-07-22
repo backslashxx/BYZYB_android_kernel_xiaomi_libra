@@ -97,14 +97,20 @@ static int ksu_vfs_fstatat(int dfd, const char __user *filename, struct kstat *s
 	ksu_handle_stat(&dfd, &filename, &flags);
 	return vfs_fstatat(dfd, filename, stat, flags);
 }
-#else // < 5.10
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0) || defined(KSU_HAS_STATX)
 extern int vfs_statx(int dfd, const char __user *filename, int flags, struct kstat *stat, u32 request_mask);
 static int ksu_vfs_statx(int dfd, const char __user *filename, int flags, struct kstat *stat, u32 request_mask)
 {
 	ksu_handle_stat(&dfd, &filename, &flags);
 	return vfs_statx(dfd, filename, flags, stat, request_mask);
 }
-#endif // 5.10+
+#else
+static int ksu_vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat, int flag)
+{
+	ksu_handle_stat(&dfd, &filename, &flag);
+	return vfs_fstatat(dfd, filename, stat, flag);
+}
+#endif
 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
@@ -223,14 +229,19 @@ static int bl_hook_newfstatat(void *data)
 	pr_info("sys_newfstatat: vfs_statx: ret %d \n", ret);
 	if (!ret)
 		return ret;
-#else // < 5.10
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0) || defined(KSU_HAS_STATX)
 	symbol_addr = kernel_function_lookup("vfs_statx");
 	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_vfs_statx);
 	pr_info("sys_newfstatat: vfs_statx: ret %d \n", ret);
 	if (!ret)
 		return ret;
+#else
+	symbol_addr = kernel_function_lookup("vfs_fstatat");
+	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_vfs_fstatat);
+	pr_info("sys_newfstatat: vfs_fstatat: ret %d \n", ret);
+	if (!ret)
+		return ret;
 #endif
-
 	read_and_replace_syscall((void *)&aarch64_newfstatat, __AARCH64_newfstatat, (void *)hook_aarch64_newfstatat, (void *)sys_call_table);
 	return ret;
 }
@@ -300,10 +311,16 @@ static int bl_hook_fstatat64(void *data)
 	pr_info("sys_fstatat64: vfs_statx: ret %d \n", ret);
 	if (!ret)
 		return ret;
-#else // < 5.10
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0) || defined(KSU_HAS_STATX)
 	symbol_addr = kernel_function_lookup("vfs_statx");
 	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_vfs_statx);
 	pr_info("sys_fstatat64: vfs_statx: ret %d \n", ret);
+	if (!ret)
+		return ret;
+#else
+	symbol_addr = kernel_function_lookup("vfs_fstatat");
+	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_vfs_fstatat);
+	pr_info("sys_fstatat64: vfs_fstatat: ret %d \n", ret);
 	if (!ret)
 		return ret;
 #endif

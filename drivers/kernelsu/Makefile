@@ -79,7 +79,14 @@ endif
 
 # branch link hook, do_faccessat
 ifeq ($(shell grep "long do_faccessat" $(srctree)/fs/open.c 2>/dev/null | grep -q "flags" 2>/dev/null; echo $$?),0)
+$(info -- KernelSU/compat: faccessat2 found!)
 CFLAGS_ksu.o += -DKSU_HAS_FACCESSAT2
+endif
+
+# branch link hook, vfs_statx
+ifeq ($(shell grep -q "int vfs_statx" $(srctree)/fs/stat.c 2>/dev/null | grep -q "__user" 2>/dev/null; echo $$?),0)
+$(info -- KernelSU/compat: vfs_statx found!)
+CFLAGS_ksu.o += -DKSU_HAS_STATX
 endif
 
 # UL, look for read_iter on f_op struct
