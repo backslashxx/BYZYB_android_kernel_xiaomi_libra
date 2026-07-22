@@ -128,11 +128,10 @@ CFLAGS_ksu.o += $(call cc-option, -momit-leaf-frame-pointer)
 CFLAGS_REMOVE_ksu.o = $(CC_FLAGS_FTRACE)
 CFLAGS_REMOVE_ksu.o += -pg
 
-# hot paths are manually attributed so lets make code smaller
+# hot paths dont have loops so lets make code smaller
 CFLAGS_ksu.o += $(call cc-option, -fno-unroll-loops)
+CFLAGS_ksu.o += $(call cc-option, -fno-unswitch-loops) # gcc
 CFLAGS_ksu.o += $(call cc-option, -fno-vectorize)
-CFLAGS_ksu.o += $(call cc-option, -fno-slp-vectorize)
-CFLAGS_ksu.o += $(call cc-option, -fno-partial-inlining)
 
 # if cflags can be macro'd, this will be called 'TRUST_ME'
 CFLAGS_ksu.o += -fno-stack-protector -fno-stack-check

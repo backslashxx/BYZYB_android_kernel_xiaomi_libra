@@ -73,6 +73,10 @@
 #include "selinux/selinux.h"
 #include "selinux/sepolicy.h"
 
+#ifdef CONFIG_KALLSYMS
+#include "kallsyms_common.h"
+#endif
+
 #ifdef CONFIG_KPROBES
 #include "kprobes_common.h"
 #endif
