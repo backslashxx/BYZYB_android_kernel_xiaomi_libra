@@ -106,6 +106,8 @@ static int ksu_vfs_statx(int dfd, const char __user *filename, int flags, struct
 }
 #endif // 5.10+
 
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 static int (*do_execveat_common_fn)(int fd, struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags) __read_mostly = NULL;
 static __nocfi int ksu_do_execveat_common(int fd, struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags)
 {
@@ -140,6 +142,15 @@ static __nocfi int ksu_compat_do_execve(struct filename *filename, const compat_
 
 	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
 	return compat_do_execve_fn(filename, __argv, __envp);
+}
+#endif
+
+#else
+static int (*do_execve_common_fn)(const char *filename, struct user_arg_ptr argv, struct user_arg_ptr envp) __read_mostly = NULL;
+static int ksu_do_execve_common(const char *filename, struct user_arg_ptr argv, struct user_arg_ptr envp)
+{
+	ksu_legacy_execve_sucompat(&filename, &argv, &envp);
+	return do_execve_common_fn(filename, argv, envp);
 }
 #endif
 
@@ -232,6 +243,7 @@ static int bl_hook_execve(void *data)
 
 	target_callsite = syscall_lookup("sys_execve");
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 	symbol_addr = kernel_function_lookup("do_execveat_common");
 	do_execveat_common_fn = symbol_addr;
 	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_do_execveat_common);
@@ -250,6 +262,14 @@ static int bl_hook_execve(void *data)
 	symbol_addr = kernel_function_lookup("do_execve");
 	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_do_execve);
 	pr_info("sys_execve: do_execve: ret %d \n", ret);
+	if (!ret)
+		return ret;
+#endif
+#else
+	symbol_addr = kernel_function_lookup("do_execve_common");
+	do_execve_common_fn = symbol_addr;
+	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_do_execve_common);
+	pr_info("sys_execve: do_execve_common: ret %d \n", ret);
 	if (!ret)
 		return ret;
 #endif
@@ -299,6 +319,7 @@ static int bl_hook_compat_execve(void *data)
 
 	target_callsite = syscall_lookup("compat_sys_execve");
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 	symbol_addr = kernel_function_lookup("do_execveat_common");
 	do_execveat_common_fn = symbol_addr;
 	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_do_execveat_common);
@@ -318,6 +339,14 @@ static int bl_hook_compat_execve(void *data)
 	compat_do_execve_fn = symbol_addr;
 	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_compat_do_execve);
 	pr_info("compat_sys_execve: compat_do_execve: ret %d \n", ret);
+	if (!ret)
+		return ret;
+#endif
+#else
+	symbol_addr = kernel_function_lookup("do_execve_common");
+	do_execve_common_fn = symbol_addr;
+	ret = arm64_bl_patch(target_callsite, 128 * sizeof(void *), symbol_addr, (uintptr_t)&ksu_do_execve_common);
+	pr_info("sys_execve: do_execve_common: ret %d \n", ret);
 	if (!ret)
 		return ret;
 #endif
