@@ -25,6 +25,20 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0) || defined(CONFIG_KSU_HACK_ARM64_BRANCH_LINK)
 
+__weak s32 aarch64_get_branch_offset(u32 insn)
+{
+	// 26-bit signed relative jump offset
+	// FC, D, E, F, so 3
+	s32 imm26 = insn & 0x03FFFFFF;
+
+	// in case of backward jumps
+	if (imm26 & 0x02000000)
+		imm26 |= 0xFC000000;
+
+	// 4-byte word count to byte delta
+	return imm26 * 4;
+}
+
 /**
  * arm64_bl_patch(): hunt and patch first bl insn found with target
  *
