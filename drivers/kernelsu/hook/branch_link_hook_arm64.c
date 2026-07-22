@@ -150,6 +150,7 @@ static __nocfi int ksu_compat_do_execve(struct filename *filename, const compat_
 	return compat_do_execve_fn(filename, __argv, __envp);
 }
 #endif
+#endif // 5.9+
 
 #else
 static int (*do_execve_common_fn)(const char *filename, struct user_arg_ptr argv, struct user_arg_ptr envp) __read_mostly = NULL;
@@ -158,9 +159,7 @@ static int ksu_do_execve_common(const char *filename, struct user_arg_ptr argv, 
 	ksu_legacy_execve_sucompat(&filename, &argv, &envp);
 	return do_execve_common_fn(filename, argv, envp);
 }
-#endif
-
-#endif // 5.9+
+#endif // 3.14+
 
 #ifdef CONFIG_KPROBES
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
