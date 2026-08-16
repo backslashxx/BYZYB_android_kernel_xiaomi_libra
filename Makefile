@@ -242,8 +242,8 @@ else
 HOSTCC = clang
 HOSTCXX = clang++
 endif
-HOSTCFLAGS := -O3 -ffast-math -fomit-frame-pointer -pipe
-HOSTCXXFLAGS := -O3 -ffast-math -pipe
+HOSTCFLAGS := -O3 -fomit-frame-pointer -pipe
+HOSTCXXFLAGS := -O3 -pipe
 
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
@@ -644,9 +644,9 @@ KBUILD_CFLAGS += -Os
 KBUILD_CPPFLAGS += -Os
 LDFLAGS += -O3
 else
-KBUILD_AFLAGS += -O3 -ffast-math
-KBUILD_CFLAGS += -O3 -ffast-math
-KBUILD_CPPFLAGS += -O3 -ffast-math
+KBUILD_AFLAGS += -O3
+KBUILD_CFLAGS += -O3
+KBUILD_CPPFLAGS += -O3
 LDFLAGS += -O3
 endif
 
