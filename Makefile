@@ -741,11 +741,6 @@ KBUILD_CFLAGS += -fomit-frame-pointer
 endif
 endif
 
-# Initialize all stack variables with a pattern, if desired.
-ifdef CONFIG_INIT_STACK_ALL
-KBUILD_CFLAGS	+= -ftrivial-auto-var-init=pattern
-endif
-
 ifdef CONFIG_DEBUG_INFO
 KBUILD_CFLAGS += -g
 KBUILD_AFLAGS += -gdwarf-2

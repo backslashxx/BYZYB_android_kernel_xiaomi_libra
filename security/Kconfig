@@ -136,16 +136,6 @@ config LSM_MMAP_MIN_ADDR
 	  this low address space will need the permission specific to the
 	  systems running LSM.
 
-config INIT_STACK_ALL
-	bool "0xAA-init everything on the stack (strongest)"
-	default y
-	help
-	  Initializes everything on the stack with a 0xAA
-	  pattern. This is intended to eliminate all classes
-	  of uninitialized stack variable exploits and information
-	  exposures, even variables that were warned to have been
-	  left uninitialized.
-
 source security/selinux/Kconfig
 source security/smack/Kconfig
 source security/tomoyo/Kconfig
