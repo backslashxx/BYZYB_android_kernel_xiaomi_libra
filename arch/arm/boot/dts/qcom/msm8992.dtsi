@@ -2851,8 +2851,8 @@
 		qcom,freq-step = <1>;
 		qcom,core-limit-temp = <65>;
 		qcom,core-temp-hysteresis = <10>;
-		qcom,core-control-list = <&CPU2 &CPU3 &CPU4 &CPU5>;
-		qcom,hotplug-temp = <65>;
+		qcom,core-control-list = <&CPU4 &CPU5>;
+		qcom,hotplug-temp = <85>;
 		qcom,hotplug-temp-hysteresis = <10>;
 		qcom,cpu-sensors = "tsens_tz_sensor7", "tsens_tz_sensor7", "tsens_tz_sensor9", "tsens_tz_sensor10", "tsens_tz_sensor13", "tsens_tz_sensor14";
 		qcom,disable-freq-mitigation;
