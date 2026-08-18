@@ -3400,7 +3400,7 @@
 		qcom,poll-ms = <2000>;
 		qcom,limit-temp = <60>;
 		qcom,temp-hysteresis = <5>;
-		qcom,therm-reset-temp = <120>;
+		qcom,therm-reset-temp = <115>;
 		qcom,freq-step = <1>;
 		qcom,core-limit-temp = <70>;
 		qcom,core-temp-hysteresis = <10>;
