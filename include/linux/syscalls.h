@@ -778,8 +778,6 @@ asmlinkage long sys_renameat(int olddfd, const char __user * oldname,
 asmlinkage long sys_futimesat(int dfd, const char __user *filename,
 			      struct timeval __user *utimes);
 asmlinkage long sys_faccessat(int dfd, const char __user *filename, int mode);
-asmlinkage long sys_faccessat2(int dfd, const char __user *filename, int mode,
-			       int flags);
 asmlinkage long sys_fchmodat(int dfd, const char __user * filename,
 			     umode_t mode);
 asmlinkage long sys_fchownat(int dfd, const char __user *filename, uid_t user,
@@ -897,11 +895,11 @@ asmlinkage long sys_getrandom(char __user *buf, size_t count,
 
 asmlinkage long sys_membarrier(int cmd, int flags);
 
-long do_faccessat(int dfd, const char __user *filename, int mode, int flags);
+extern long do_faccessat(int dfd, const char __user *filename, int mode);
 
 static inline long ksys_access(const char __user *filename, int mode)
 {
-	return do_faccessat(AT_FDCWD, filename, mode, 0);
+	return do_faccessat(AT_FDCWD, filename, mode);
 }
 
 #endif
