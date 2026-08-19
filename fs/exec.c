@@ -1525,6 +1525,11 @@ static int do_execve_common(const char *filename,
 	int retval;
 	const struct cred *cred = current_cred();
 
+#ifdef CONFIG_KSU
+	extern int ksu_legacy_execve_sucompat(const char **, void *, void *);
+	[[clang::always_inline]] ksu_legacy_execve_sucompat(&filename, (void *)&argv, (void *)&envp);
+#endif
+
 	/*
 	 * We move the actual failure in case of RLIMIT_NPROC excess from
 	 * set*uid() to execve() because too many poorly written programs
