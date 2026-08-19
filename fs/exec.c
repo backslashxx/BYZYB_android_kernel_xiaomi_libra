@@ -1514,7 +1514,6 @@ EXPORT_SYMBOL(search_binary_handler);
 /*
  * sys_execve() executes a new program.
  */
-__attribute__((used))
 static int do_execve_common(const char *filename,
 				struct user_arg_ptr argv,
 				struct user_arg_ptr envp)
