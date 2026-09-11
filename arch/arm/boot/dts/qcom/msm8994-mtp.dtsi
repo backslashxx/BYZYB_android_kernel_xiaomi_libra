@@ -1130,7 +1130,7 @@
 
 /{
 	mtp_batterydata: qcom,battery-data {
-		qcom,batt-id-range-pct = <15>;
+		qcom,batt-id-range-pct = <100>;
 		#include "batterydata-bm34-lg-3090mah.dtsi"
 		#include "batterydata-bm34-samsung-3090mah.dtsi"
 		#include "batterydata-itech-3020mah.dtsi"

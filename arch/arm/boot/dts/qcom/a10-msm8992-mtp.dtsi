@@ -1033,7 +1033,7 @@
 
 /{
 	mtp_batterydata: qcom,battery-data {
-		qcom,batt-id-range-pct = <15>;
+		qcom,batt-id-range-pct = <100>;
 		#include "batterydata-a10-atl-3260mah.dtsi"
 		#include "batterydata-a10-sdi-3260mah.dtsi"
 		#include "batterydata-itech-3020mah.dtsi"

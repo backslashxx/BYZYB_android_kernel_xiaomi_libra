@@ -1051,7 +1051,7 @@
 
 /{
 	mtp_batterydata: qcom,battery-data {
-		qcom,batt-id-range-pct = <15>;
+		qcom,batt-id-range-pct = <100>;
 		#include "batterydata-x11-atl-3080mah.dtsi"
 		#include "batterydata-x11-lg-3080mah.dtsi"
 		#include "batterydata-itech-3020mah.dtsi"
